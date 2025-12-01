@@ -1,50 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FinancialState, Transaction, Debt, AIPlanResponse } from './types';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
 import DebtList from './components/DebtList';
 import AiPlanner from './components/AiPlanner';
-import { LayoutDashboard, Wallet, Receipt, BrainCircuit } from 'lucide-react';
+import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2 } from 'lucide-react';
+import { dataService } from './services/dataService';
 
 const App: React.FC = () => {
   // --- Global State ---
-  
-  // 1. Transactions (Using specific dates for Dec 2025 as base)
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    // VALE CLUSTER (15-30)
-    { id: 'inc-1', date: '2025-12-15T10:00:00.000Z', description: 'Renda Mensal (Vale)', amount: 2323.20, type: 'INCOME', category: 'Salary', status: 'PAID' },
-    { id: 'exp-1', date: '2025-12-15T10:00:00.000Z', description: 'Aluguel', amount: 550.00, type: 'EXPENSE', category: 'Housing', status: 'PENDING' },
-    { id: 'exp-2', date: '2025-12-15T10:00:00.000Z', description: 'Celular', amount: 60.00, type: 'EXPENSE', category: 'Utilities', status: 'PENDING' },
-    { id: 'exp-3', date: '2025-12-15T10:00:00.000Z', description: 'Futebol', amount: 50.00, type: 'EXPENSE', category: 'Leisure', status: 'PENDING' },
-    { id: 'exp-4', date: '2025-12-15T10:00:00.000Z', description: 'Cannabis', amount: 150.00, type: 'EXPENSE', category: 'Personal', status: 'PENDING' },
-    { id: 'exp-5', date: '2025-12-16T10:00:00.000Z', description: 'Filho/Lazer (Parcial 1)', amount: 300.00, type: 'EXPENSE', category: 'Family', status: 'PENDING' },
-    { id: 'exp-6', date: '2025-12-16T10:00:00.000Z', description: 'Variável Geral', amount: 50.00, type: 'EXPENSE', category: 'General', status: 'PENDING' },
-
-    // VALE (End of month items usually fall into the 30th bucket)
-    { id: 'inc-2', date: '2025-12-30T10:00:00.000Z', description: 'Renda Mensal (Fim Mês)', amount: 1061.17, type: 'INCOME', category: 'Salary', status: 'PENDING' },
-    { id: 'exp-7', date: '2025-12-30T10:00:00.000Z', description: 'Internet', amount: 165.00, type: 'EXPENSE', category: 'Utilities', status: 'PENDING' },
-    { id: 'exp-8', date: '2025-12-30T10:00:00.000Z', description: 'Filho/Lazer (Parcial 2)', amount: 300.00, type: 'EXPENSE', category: 'Family', status: 'PENDING' },
-    { id: 'exp-9', date: '2025-12-30T10:00:00.000Z', description: 'Variável Geral (Fim Mês)', amount: 50.00, type: 'EXPENSE', category: 'General', status: 'PENDING' },
-    
-    // PAGAMENTO CLUSTER (01-14) - Example for next month context if viewed generally
-    // (None initially for Dec 2025 based on prompt, but available for future entries)
-  ]);
-
-  // 2. Debts (Dívidas Pendentes)
-  const [debts, setDebts] = useState<Debt[]>([
-    { id: 'd1', creditor: 'Receita Federal (Parcelamento)', totalAmount: 5184.96, remainingAmount: 5184.96, monthlyPayment: 740.71, installmentsRemaining: 7, interestRate: 0, dueDateDay: 20, priority: 'HIGH' },
-    { id: 'd2', creditor: 'Multa do Carro', totalAmount: 850.00, remainingAmount: 850.00, monthlyPayment: 850.00, installmentsRemaining: 1, interestRate: 0, dueDateDay: 10, priority: 'MEDIUM' },
-    { id: 'd3', creditor: 'Faculdade', totalAmount: 1559.16, remainingAmount: 1559.16, monthlyPayment: 1559.16, installmentsRemaining: 1, interestRate: 0, dueDateDay: 10, priority: 'MEDIUM' },
-    { id: 'd4', creditor: 'Luz (Atrasada)', totalAmount: 365.00, remainingAmount: 365.00, monthlyPayment: 365.00, installmentsRemaining: 1, interestRate: 0, dueDateDay: 5, priority: 'HIGH' },
-    { id: 'd5', creditor: 'Sabesp (Atrasada)', totalAmount: 1109.24, remainingAmount: 1109.24, monthlyPayment: 1109.24, installmentsRemaining: 1, interestRate: 0, dueDateDay: 5, priority: 'HIGH' },
-    { id: 'd6', creditor: 'Carro Dívida Ativa', totalAmount: 773.28, remainingAmount: 773.28, monthlyPayment: 386.64, installmentsRemaining: 2, interestRate: 0, dueDateDay: 20, priority: 'MEDIUM' },
-  ]);
-
-  // 3. Current Balance (Zerado conforme solicitação)
-  const [initialBalance, setInitialBalance] = useState(0);
-
+  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
+  const [initialBalance, setInitialBalance] = useState(0); // Fixed at 0
   const [aiPlan, setAiPlan] = useState<AIPlanResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'debts' | 'ai'>('dashboard');
+
+  // Load Data on Mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const state = await dataService.fetchFinancialState();
+      setTransactions(state.transactions);
+      setDebts(state.debts);
+    } catch (error) {
+      console.error("Failed to load data", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const financialState: FinancialState = {
     currentBalance: initialBalance,
@@ -53,52 +41,65 @@ const App: React.FC = () => {
   };
 
   // --- Handlers ---
-  const addTransaction = (input: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => {
-    const newItems = Array.isArray(input) ? input : [input];
-    const withIds = newItems.map(t => ({ 
-      ...t, 
-      id: crypto.randomUUID(),
-      // Ensure status is set if not provided (though types suggest it should be there, safe default)
-      status: t.status || 'PENDING' 
-    }));
-    setTransactions(prev => [...prev, ...withIds]);
+  const addTransaction = async (input: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => {
+    const items = Array.isArray(input) ? input : [input];
+    await dataService.addTransactions(items);
+    await loadData(); // Reload to get IDs and fresh state
     setAiPlan(null);
   };
 
-  const updateTransaction = (updated: Transaction) => {
+  const updateTransaction = async (updated: Transaction) => {
+    // Optimistic update
     setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
+    await dataService.updateTransaction(updated);
     setAiPlan(null);
   }
 
-  const toggleTransactionStatus = (id: string) => {
-    setTransactions(prev => prev.map(t => {
-      if (t.id === id) {
-        return { ...t, status: t.status === 'PAID' ? 'PENDING' : 'PAID' };
-      }
-      return t;
-    }));
+  const toggleTransactionStatus = async (id: string) => {
+    const t = transactions.find(t => t.id === id);
+    if (!t) return;
+    
+    const newStatus = t.status === 'PAID' ? 'PENDING' : 'PAID';
+    // Optimistic
+    setTransactions(prev => prev.map(tr => tr.id === id ? { ...tr, status: newStatus } : tr));
+    
+    await dataService.updateTransaction({ ...t, status: newStatus });
     setAiPlan(null);
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
+    await dataService.deleteTransaction(id);
     setAiPlan(null);
   };
 
-  const addDebt = (d: Omit<Debt, 'id'>) => {
-    setDebts(prev => [...prev, { ...d, id: crypto.randomUUID() }]);
+  const addDebt = async (d: Omit<Debt, 'id'>) => {
+    await dataService.addDebt(d);
+    await loadData();
     setAiPlan(null);
   };
 
-  const updateDebt = (updated: Debt) => {
+  const updateDebt = async (updated: Debt) => {
     setDebts(prev => prev.map(d => d.id === updated.id ? updated : d));
+    await dataService.updateDebt(updated);
     setAiPlan(null);
   };
 
-  const deleteDebt = (id: string) => {
+  const deleteDebt = async (id: string) => {
     setDebts(prev => prev.filter(d => d.id !== id));
+    await dataService.deleteDebt(id);
     setAiPlan(null);
   };
+
+  if (loading && transactions.length === 0) {
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+            <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
+            <h2 className="text-xl font-bold">Sincronizando Banco de Dados...</h2>
+            <p className="text-slate-400 text-sm mt-2">Conectando ao Supabase</p>
+        </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
@@ -140,7 +141,7 @@ const App: React.FC = () => {
         </nav>
 
         <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-          Analista v2.1 - Zero Debt
+          Analista v2.2 - Supabase
         </div>
       </aside>
 
