@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
-import { PlusCircle, Trash2, Edit2, Filter, Calendar, Save, Repeat, Check, Circle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -14,7 +15,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
   // --- Filtering State ---
   const [filterMode, setFilterMode] = useState<'ALL' | 'MONTH'>('MONTH');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // --- Form State ---
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,10 +143,33 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     return list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [transactions, filterMode, selectedMonth, selectedYear]);
 
+  // --- Financial Summary Logic (Chart Data) ---
+  const summaryStats = useMemo(() => {
+    const totalIncome = filteredTransactions
+      .filter(t => t.type === 'INCOME')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const totalExpense = filteredTransactions
+      .filter(t => t.type === 'EXPENSE')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const margin = Math.max(0, totalIncome - totalExpense);
+    const percentCompromised = totalIncome > 0 ? (totalExpense / totalIncome) * 100 : 0;
+
+    // Chart Data: Slice 1 = Expense, Slice 2 = Margin (Remaining Income)
+    // If Expense > Income, we show 100% Expense visually or handle specifically.
+    const chartData = [
+      { name: 'Despesas Comprometidas', value: totalExpense },
+      { name: 'Margem Livre', value: margin }
+    ];
+
+    return { totalIncome, totalExpense, margin, percentCompromised, chartData };
+  }, [filteredTransactions]);
+
+
   // --- Clustering Logic (Vale vs Pagamento) ---
   const clusters = useMemo(() => {
     // Pagamento: Dia 30 a 14 (virada do mês)
-    // Consideramos no "Cluster Pagamento" do mês visualizado: dias 1-14 e dias 30-31
     const pag = filteredTransactions.filter(t => {
       const day = new Date(t.date).getDate();
       return day >= 30 || (day >= 1 && day <= 14);
@@ -174,6 +198,8 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
+
+  const COLORS = ['#dc2626', '#0f172a']; // Red for Expense, Dark for Margin
 
   return (
     <div className="space-y-8">
@@ -214,8 +240,71 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
         )}
       </div>
 
+      {/* 2. Compromised Income Analysis (New Section) */}
+      <div className="bg-white border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+             <PieIcon className="w-5 h-5 text-slate-900" />
+             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Análise de Comprometimento de Renda</h3>
+          </div>
+          
+          <div className="flex flex-col md:flex-row items-center justify-around gap-8">
+              {/* Chart */}
+              <div className="w-full md:w-1/3 h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={summaryStats.chartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {summaryStats.chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+              </div>
+
+              {/* Stats */}
+              <div className="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-50 p-4 border-l-4 border-slate-900">
+                      <div className="flex items-center gap-2 mb-1">
+                          <ArrowUpCircle className="w-4 h-4 text-slate-500" />
+                          <span className="text-xs font-bold uppercase text-slate-500">Receita Total</span>
+                      </div>
+                      <p className="text-xl font-bold text-slate-900">R$ {summaryStats.totalIncome.toLocaleString('pt-BR')}</p>
+                      <p className="text-[10px] text-slate-400">Projetada no período</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 border-l-4 border-red-600">
+                      <div className="flex items-center gap-2 mb-1">
+                          <ArrowDownCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-xs font-bold uppercase text-slate-500">Despesa Total</span>
+                      </div>
+                      <p className="text-xl font-bold text-red-600">R$ {summaryStats.totalExpense.toLocaleString('pt-BR')}</p>
+                      <p className="text-[10px] text-slate-400">Pagas + Pendentes</p>
+                  </div>
+
+                  <div className={`p-4 border border-dashed text-center flex flex-col justify-center ${summaryStats.percentCompromised > 100 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-300'}`}>
+                      <span className="text-xs font-bold uppercase text-slate-500">Renda Comprometida</span>
+                      <p className={`text-2xl font-black ${summaryStats.percentCompromised > 90 ? 'text-red-600' : 'text-slate-900'}`}>
+                          {summaryStats.percentCompromised.toFixed(1)}%
+                      </p>
+                      {summaryStats.percentCompromised > 100 && (
+                          <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-full mt-1 inline-block">DÉFICIT OPERACIONAL</span>
+                      )}
+                  </div>
+              </div>
+          </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* 2. Input/Edit Form */}
+        {/* 3. Input/Edit Form */}
         <div className="bg-white p-6 border border-slate-200 h-fit shadow-sm relative">
           <div className="absolute top-0 left-0 w-1 h-full bg-slate-900"></div>
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-tight">
@@ -330,7 +419,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
           </form>
         </div>
 
-        {/* 3. Transaction List (Clustered) */}
+        {/* 4. Transaction List (Clustered) */}
         <div className="lg:col-span-2 space-y-8">
             
             {/* Cluster: Pagamento (30 a 14) */}
@@ -342,7 +431,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                     </div>
                     <div className={`text-lg font-bold ${clusters.pagamento.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
                         {clusters.pagamento.total < 0 ? '-' : ''}R$ {Math.abs(clusters.pagamento.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido)</span>
+                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido Realizado)</span>
                     </div>
                 </div>
                 <TransactionTable 
@@ -362,7 +451,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                     </div>
                     <div className={`text-lg font-bold ${clusters.vale.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
                         {clusters.vale.total < 0 ? '-' : ''}R$ {Math.abs(clusters.vale.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido)</span>
+                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido Realizado)</span>
                     </div>
                 </div>
                 <TransactionTable 

@@ -123,6 +123,30 @@ const App: React.FC = () => {
     setAiPlan(null);
   };
 
+  // --- New Handler for Debt Payment ---
+  const registerDebtPayment = async (debtId: string, amountPaid: number, date: string, createTransaction: boolean) => {
+    const debt = debts.find(d => d.id === debtId);
+    if (!debt) return;
+
+    const newRemaining = Math.max(0, debt.remainingAmount - amountPaid);
+    
+    // 1. Update Debt
+    const updatedDebt = { ...debt, remainingAmount: newRemaining };
+    await updateDebt(updatedDebt);
+
+    // 2. Create Transaction (Optional)
+    if (createTransaction) {
+      await addTransaction({
+        date: new Date(date).toISOString(),
+        description: `Pgto Dívida: ${debt.creditor}`,
+        amount: amountPaid,
+        type: 'EXPENSE',
+        category: 'Dívida', // Categoria específica para gráficos
+        status: 'PAID'
+      });
+    }
+  };
+
   // --- Render Conditions ---
 
   if (loadingSession) {
@@ -229,7 +253,8 @@ const App: React.FC = () => {
               debts={debts} 
               onAddDebt={addDebt} 
               onUpdateDebt={updateDebt}
-              onDeleteDebt={deleteDebt} 
+              onDeleteDebt={deleteDebt}
+              onRegisterPayment={registerDebtPayment} 
             />
           )}
           {activeTab === 'ai' && <AiPlanner state={financialState} onPlanGenerated={setAiPlan} currentPlan={aiPlan} />}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
 import { FinancialState, AIPlanResponse } from '../types';
-import { Wallet, TrendingDown, TrendingUp, AlertTriangle, Calendar, ArrowUpCircle, ArrowDownCircle, Flame, Target } from 'lucide-react';
+import { Wallet, TrendingDown, ArrowUpCircle, ArrowDownCircle, Flame, Calendar, Filter } from 'lucide-react';
 
 interface DashboardProps {
   state: FinancialState;
@@ -9,9 +9,8 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
-  const totalDebt = state.debts.reduce((acc, d) => acc + d.remainingAmount, 0);
-  
-  // --- Filter State for Monthly Performance ---
+  // --- Filter State ---
+  const [filterMode, setFilterMode] = useState<'ALL' | 'MONTH'>('MONTH');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
   const [selectedYear, setSelectedYear] = useState(2025);
 
@@ -20,69 +19,108 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  // --- Calculate Monthly Stats based on filter (CASH BASIS / REALIZED) ---
-  const monthlyStats = useMemo(() => {
-    const filtered = state.transactions.filter(t => {
-      const d = new Date(t.date);
-      return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-    });
-
-    // INCOME is usually considered reliable/projected, but expenses we now track by PAID status
-    // For Dashboard, we likely want to see "Realized" to know current burn.
-    const income = filtered.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-    const expense = filtered.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((acc, t) => acc + t.amount, 0);
-    const result = income - expense;
+  // --- Calculate Metrics based on filter ---
+  const stats = useMemo(() => {
+    let filteredTransactions = state.transactions;
     
-    // For Burn Rate, we might want projected expense too? Let's stick to Realized as per user request.
-    const projectedExpense = filtered.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
-
-    // Group by Category
-    const categoryData: Record<string, number> = {};
-    filtered.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').forEach(t => {
-       categoryData[t.category] = (categoryData[t.category] || 0) + t.amount;
-    });
-    const pieData = Object.keys(categoryData).map(k => ({ name: k, value: categoryData[k] }));
-
-    // Daily Cash Flow Curve
-    const dailyData: any[] = [];
-    let runningBalance = 0; // Starts at 0 for the month view? Or cumulative? Let's show net flow accumulation.
-    
-    // Sort by day
-    const sorted = [...filtered].sort((a,b) => new Date(a.date).getDate() - new Date(b.date).getDate());
-    
-    // Aggregate by day
-    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    for (let i = 1; i <= daysInMonth; i++) {
-        const dayTransactions = sorted.filter(t => new Date(t.date).getDate() === i);
-        const dayIncome = dayTransactions.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0);
-        const dayExpense = dayTransactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((s, t) => s + t.amount, 0);
-        
-        runningBalance += (dayIncome - dayExpense);
-        dailyData.push({ day: i, balance: runningBalance });
+    if (filterMode === 'MONTH') {
+      filteredTransactions = state.transactions.filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+      });
     }
 
-    return { income, expense, result, projectedExpense, pieData, dailyData };
-  }, [state.transactions, selectedMonth, selectedYear]);
+    // 1. Stacked Bar Data (One bar for Current View)
+    // We want to show: Total Income vs (Expenses Paid + Expenses Pending)
+    const income = filteredTransactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + t.amount, 0);
+    const expensesPaid = filteredTransactions.filter(t => t.type === 'EXPENSE' && t.status === 'PAID').reduce((sum, t) => sum + t.amount, 0);
+    const expensesPending = filteredTransactions.filter(t => t.type === 'EXPENSE' && t.status === 'PENDING').reduce((sum, t) => sum + t.amount, 0);
 
-  // --- Chart Data (AI Plan) ---
-  const chartData = plan ? plan.projections.slice(0, 12).map(p => ({
-    ...p,
-    totalDebtPay: p.debtPayments.reduce((sum, pay) => sum + pay.amount, 0)
-  })) : [];
+    const stackedData = [
+      {
+        name: filterMode === 'ALL' ? 'Geral' : months[selectedMonth],
+        Receitas: income,
+        'Despesas Pagas': expensesPaid,
+        'Despesas Pendentes': expensesPending
+      }
+    ];
 
-  const burnRate = monthlyStats.income > 0 ? (monthlyStats.expense / monthlyStats.income) * 100 : 0;
-  const COLORS = ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '#dc2626'];
+    // 2. Donut: Expense Status
+    const expenseDonutData = [
+      { name: 'Pagas', value: expensesPaid },
+      { name: 'Pendentes', value: expensesPending }
+    ].filter(d => d.value > 0);
+
+    // 3. Donut: Liabilities (Debt)
+    // "Quanto em aberto" vs "Quanto foi pago"
+    // Open = Sum of current debts remaining amount
+    // Paid = We infer this from transactions in the selected period categorized as "Dívida" OR description contains "Pgto Dívida"
+    
+    // For "General" view, maybe we show Total Debt Original vs Remaining? 
+    // The prompt asks: "Quanto em aberto; quanto foi pago no mês ou geral"
+    
+    const totalOpenDebt = state.debts.reduce((acc, d) => acc + d.remainingAmount, 0);
+    
+    // Calculate how much was paid in the filtered period
+    const debtPaymentsInPeriod = filteredTransactions
+      .filter(t => t.type === 'EXPENSE' && t.status === 'PAID' && (t.category === 'Dívida' || t.description.toLowerCase().includes('dívida') || t.description.toLowerCase().includes('parcelamento')))
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const debtDonutData = [
+       { name: 'Em Aberto', value: totalOpenDebt },
+       { name: 'Amortizado', value: debtPaymentsInPeriod }
+    ];
+
+    return {
+      income,
+      expensesPaid,
+      expensesPending,
+      stackedData,
+      expenseDonutData,
+      debtDonutData,
+      debtPaymentsInPeriod,
+      totalOpenDebt
+    };
+  }, [state.transactions, state.debts, filterMode, selectedMonth, selectedYear]);
+
+  const COLORS_EXPENSE = ['#dc2626', '#cbd5e1']; // Paid (Red/Done? No, let's use dark for paid), Pending (Light)
+  // Actually usually Paid = Dark/Solid, Pending = Light/Ghost.
+  // Let's stick to the theme: 
+  // Expense Paid = Slate 900
+  // Expense Pending = Red 600 (Danger!)
+  const COLORS_DONUT_EXP = ['#0f172a', '#dc2626']; 
+
+  // Debt: Open = Red (Danger), Amortized = Slate (Good)
+  const COLORS_DONUT_DEBT = ['#dc2626', '#0f172a'];
 
   return (
     <div className="space-y-8">
       
-      {/* 1. Month/Year Filter */}
+      {/* 1. Filter Bar */}
       <div className="bg-white p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-slate-700 font-bold uppercase tracking-wider text-sm">
-           <Calendar className="w-5 h-5" />
-           Inteligência Financeira Mensal
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-2 text-slate-700 font-bold uppercase tracking-wider text-sm">
+             <Filter className="w-5 h-5" />
+             Filtros de Análise
+           </div>
+           <div className="flex gap-2">
+              <button 
+                onClick={() => setFilterMode('ALL')}
+                className={`px-3 py-1 text-xs font-bold uppercase ${filterMode === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}
+              >
+                Geral
+              </button>
+              <button 
+                onClick={() => setFilterMode('MONTH')}
+                className={`px-3 py-1 text-xs font-bold uppercase ${filterMode === 'MONTH' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}
+              >
+                Mês
+              </button>
+           </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {filterMode === 'MONTH' && (
+          <div className="flex items-center gap-2">
             <select 
               value={selectedMonth} 
               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -96,196 +134,123 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="border border-slate-300 p-2 w-24 text-sm font-medium bg-white outline-none focus:border-slate-900"
             />
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* 2. Intelligence Unit Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 border-l-4 border-slate-900 shadow-sm">
-             <div className="flex justify-between items-start mb-2">
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Receita Total</p>
-                 <ArrowUpCircle className="w-4 h-4 text-slate-300" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">R$ {monthlyStats.income.toLocaleString('pt-BR', {minimumFractionDigits: 0})}</h3>
-        </div>
-
-        <div className="bg-white p-6 border-l-4 border-red-600 shadow-sm">
-             <div className="flex justify-between items-start mb-2">
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Despesa Realizada</p>
-                 <ArrowDownCircle className="w-4 h-4 text-slate-300" />
-            </div>
-            <h3 className="text-xl font-bold text-red-600">R$ {monthlyStats.expense.toLocaleString('pt-BR', {minimumFractionDigits: 0})}</h3>
-            {monthlyStats.projectedExpense > monthlyStats.expense && (
-                <p className="text-[10px] text-slate-400 mt-1">De R$ {monthlyStats.projectedExpense.toLocaleString('pt-BR', {minimumFractionDigits:0})} previstos</p>
-            )}
-        </div>
-
-        <div className="bg-white p-6 border-l-4 border-slate-500 shadow-sm">
-             <div className="flex justify-between items-start mb-2">
-                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Resultado Operacional</p>
-                 <Wallet className="w-4 h-4 text-slate-300" />
-            </div>
-            <h3 className={`text-xl font-bold ${monthlyStats.result >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
-                {monthlyStats.result >= 0 ? '+' : ''}R$ {monthlyStats.result.toLocaleString('pt-BR', {minimumFractionDigits: 0})}
-            </h3>
-        </div>
-
-        <div className="bg-slate-900 p-6 shadow-sm text-white">
-             <div className="flex justify-between items-start mb-2">
-                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Burn Rate (Queima)</p>
-                 <Flame className={`w-4 h-4 ${burnRate > 90 ? 'text-red-500' : 'text-slate-400'}`} />
-            </div>
-            <h3 className="text-xl font-bold text-white">{burnRate.toFixed(1)}%</h3>
-            <div className="w-full bg-slate-700 h-1 mt-3">
-                <div className={`h-1 ${burnRate > 100 ? 'bg-red-600' : 'bg-white'}`} style={{ width: `${Math.min(burnRate, 100)}%` }}></div>
-            </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Narrative Box */}
-        <div className="bg-white p-6 border border-slate-200 shadow-sm flex flex-col justify-center">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Análise Sintética</h4>
-            <p className="text-lg font-medium text-slate-800 leading-snug">
-                {monthlyStats.result < 0 
-                  ? "Atenção: Você está operando em Déficit Crítico. Aumente a receita ou corte despesas imediatamente para não consumir a reserva." 
-                  : monthlyStats.expense === 0 
-                  ? "Mês iniciado. Aguardando execução de pagamentos para análise de liquidez."
-                  : "Superávit Operacional detectado. O excedente deve ser alocado integralmente para amortização de passivos (dívidas) conforme a regra de ouro."}
-            </p>
-        </div>
-
-        {/* Daily Cash Curve */}
-        <div className="bg-white p-6 border border-slate-200 shadow-sm lg:col-span-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Curva de Liquidez Diária (Realizado)</h4>
-            <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlyStats.dailyData}>
-                        <defs>
-                            <linearGradient id="colorFlow" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#0f172a" stopOpacity={0.1}/>
-                                <stop offset="95%" stopColor="#0f172a" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <XAxis dataKey="day" hide />
-                        <YAxis hide />
-                        <Tooltip />
-                        <Area type="step" dataKey="balance" stroke="#0f172a" strokeWidth={2} fill="url(#colorFlow)" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-      </div>
-
-      {/* 3. Global Overview Cards */}
-      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-l-4 border-slate-900 pl-3 pt-2">Visão Geral da Carteira</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Global Balance */}
-        <div className="bg-white p-6 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Disponível (Total)</p>
-            <h3 className={`text-2xl font-bold mt-1 ${state.currentBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-              R$ {state.currentBalance.toLocaleString('pt-BR')}
-            </h3>
-          </div>
-          <div className="p-3 bg-slate-100 rounded-full">
-            <Wallet className="w-6 h-6 text-slate-400" />
-          </div>
-        </div>
-
-        {/* Global Debt */}
-        <div className="bg-red-600 p-6 shadow-sm flex items-center justify-between text-white">
-          <div>
-            <p className="text-xs font-bold text-red-200 uppercase tracking-wider">Passivo Total</p>
-            <h3 className="text-2xl font-bold mt-1 text-white">R$ {totalDebt.toLocaleString('pt-BR')}</h3>
-          </div>
-          <div className="p-3 bg-red-700 rounded-full">
-            <TrendingDown className="w-6 h-6 text-white" />
-          </div>
-        </div>
-
-        {/* Forecast */}
-        <div className="bg-white p-6 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Zero Dívida (Est.)</p>
-            <h3 className="text-2xl font-bold mt-1 text-slate-900">
-              {plan ? plan.estimatedDebtFreeDate : '--/--'}
-            </h3>
-          </div>
-          <div className="p-3 bg-slate-100 rounded-full">
-            <Target className="w-6 h-6 text-slate-600" />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Chart Area */}
+      {/* 2. Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cash Flow Projection */}
-        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[400px]">
-          <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-wider">Projeção de Fluxo de Caixa (12 Meses)</h3>
-          {!plan ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-12">
-              <AlertTriangle className="w-12 h-12 mb-2 text-slate-300" />
-              <p>Gere um plano para ver as projeções</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0f172a" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#0f172a" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="monthLabel" fontSize={10} tickMargin={10} stroke="#94a3b8" />
-                <YAxis fontSize={10} stroke="#94a3b8" />
+        
+        {/* CHART 1: Stacked Bar (Income vs Expense Breakdown) */}
+        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px]">
+           <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-2">
+             <ArrowUpCircle className="w-4 h-4" /> Fluxo: Receitas x Despesas
+           </h3>
+           <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={stats.stackedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" fontSize={12} stroke="#94a3b8" />
+                <YAxis fontSize={12} stroke="#94a3b8" />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', color: '#0f172a' }}
-                  formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Saldo']}
+                   cursor={{fill: '#f8fafc'}}
+                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0' }}
+                   formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
                 />
-                <Area type="monotone" dataKey="closingBalance" stroke="#0f172a" strokeWidth={2} fillOpacity={1} fill="url(#colorBal)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
+                <Legend />
+                <Bar dataKey="Receitas" fill="#0f172a" stackId="a" barSize={60} />
+                {/* Stack Expenses on a separate bar or usually separate? 
+                    Request said: "Despesas e Receitas" stacked bar. 
+                    Usually this compares Income Bar vs Expense Bar.
+                    Let's try to put them side by side by using different stackIds.
+                */}
+                <Bar dataKey="Despesas Pagas" stackId="b" fill="#334155" barSize={60} />
+                <Bar dataKey="Despesas Pendentes" stackId="b" fill="#dc2626" barSize={60} />
+              </BarChart>
+           </ResponsiveContainer>
         </div>
 
-        {/* Debt Payoff Structure */}
-        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[400px]">
-          <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-wider">Alocação de Pagamentos</h3>
-          {!plan ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-12">
-              <p>Gere um plano para ver a alocação</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="monthLabel" fontSize={10} tickMargin={10} stroke="#94a3b8" />
-                <YAxis fontSize={10} stroke="#94a3b8" />
-                <Tooltip 
-                    cursor={{fill: '#f1f5f9'}}
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0' }}
-                />
-                <Legend iconType="square" />
-                <Bar dataKey="totalIncome" name="Renda" fill="#cbd5e1" />
-                <Bar 
-                  dataKey="totalDebtPay" 
-                  name="Pgto Dívida" 
-                  fill="#dc2626" 
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        {/* CHART 2: Donut Expenses (Efficiency) */}
+        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px]">
+           <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-2">
+             <ArrowDownCircle className="w-4 h-4" /> Eficiência de Pagamentos
+           </h3>
+           <div className="flex items-center justify-center h-[250px]">
+             {stats.expenseDonutData.length === 0 ? (
+               <p className="text-slate-400 text-xs italic">Sem despesas registradas.</p>
+             ) : (
+               <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.expenseDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {stats.expenseDonutData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS_DONUT_EXP[index % COLORS_DONUT_EXP.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+               </ResponsiveContainer>
+             )}
+           </div>
         </div>
+
+        {/* CHART 3: Liabilities Donut */}
+        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px] lg:col-span-2">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                 <Wallet className="w-4 h-4" /> Volume de Passivos (Dívidas)
+               </h3>
+               <div className="text-xs font-medium text-slate-500">
+                  <span className="mr-3">Amortizado no Período: <strong className="text-slate-900">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</strong></span>
+                  <span>Em Aberto Total: <strong className="text-red-600">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
+               </div>
+           </div>
+           
+           <div className="flex flex-col md:flex-row items-center gap-8">
+              <div className="w-full md:w-1/2 h-[250px]">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={stats.debtDonutData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                         {/* 0: Open (Red), 1: Amortized (Dark) */}
+                         <Cell fill="#dc2626" />
+                         <Cell fill="#0f172a" />
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                      <Legend verticalAlign="bottom" height={36} />
+                    </PieChart>
+                 </ResponsiveContainer>
+              </div>
+              <div className="w-full md:w-1/2 space-y-4">
+                  <div className="p-4 bg-slate-50 border-l-4 border-red-600">
+                      <p className="text-xs uppercase text-slate-500 font-bold">Passivo Pendente</p>
+                      <p className="text-xl font-bold text-red-600">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Total que ainda precisa ser quitado.</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border-l-4 border-slate-900">
+                      <p className="text-xs uppercase text-slate-500 font-bold">Esforço de Caixa (Amortização)</p>
+                      <p className="text-xl font-bold text-slate-900">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Valor alocado para dívidas no filtro selecionado.</p>
+                  </div>
+              </div>
+           </div>
+        </div>
+
       </div>
-      
-      {plan && (
-        <div className="bg-slate-900 p-8 rounded-none border border-slate-900 text-white">
-           <h3 className="text-lg font-bold mb-4 uppercase tracking-widest border-b border-slate-700 pb-2">Sumário Executivo</h3>
-           <p className="text-slate-300 leading-relaxed whitespace-pre-line font-light">{plan.strategySummary}</p>
-        </div>
-      )}
     </div>
   );
 };
