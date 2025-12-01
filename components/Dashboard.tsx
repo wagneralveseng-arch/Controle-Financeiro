@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
 import { FinancialState, AIPlanResponse } from '../types';
-import { Wallet, TrendingDown, ArrowUpCircle, ArrowDownCircle, Flame, Calendar, Filter, PiggyBank } from 'lucide-react';
+import { Wallet, TrendingDown, ArrowUpCircle, ArrowDownCircle, Flame, Calendar, Filter, PiggyBank, CalendarClock } from 'lucide-react';
 
 interface DashboardProps {
   state: FinancialState;
@@ -12,7 +12,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
   // --- Filter State ---
   const [filterMode, setFilterMode] = useState<'ALL' | 'MONTH'>('MONTH');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -25,8 +25,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
     
     if (filterMode === 'MONTH') {
       filteredTransactions = state.transactions.filter(t => {
+        // Use UTC to avoid timezone issues
         const d = new Date(t.date);
-        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+        return d.getUTCMonth() === selectedMonth && d.getUTCFullYear() === selectedYear;
       });
     }
 
@@ -58,13 +59,55 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
     
     // Calculate how much was paid in the filtered period
     const debtPaymentsInPeriod = filteredTransactions
-      .filter(t => t.type === 'EXPENSE' && t.status === 'PAID' && (t.category === 'Dívida' || t.description.toLowerCase().includes('dívida') || t.description.toLowerCase().includes('parcelamento')))
+      .filter(t => t.type === 'EXPENSE' && t.status === 'PAID' && (t.linkedDebtId || t.category === 'Dívida' || t.description.toLowerCase().includes('dívida') || t.description.toLowerCase().includes('parcelamento')))
       .reduce((acc, t) => acc + t.amount, 0);
 
     const debtDonutData = [
        { name: 'Em Aberto', value: totalOpenDebt },
        { name: 'Amortizado', value: debtPaymentsInPeriod }
     ];
+
+    // 4. Debt Schedule Timeline (Bar Chart)
+    // Filter only DEBT related transactions (Paid or Pending)
+    const debtTransactions = filteredTransactions.filter(t => 
+       t.type === 'EXPENSE' && 
+       (t.linkedDebtId || t.category === 'Dívida' || t.description.toLowerCase().includes('dívida') || t.description.toLowerCase().includes('parcelamento'))
+    );
+
+    let timelineData = [];
+
+    if (filterMode === 'MONTH') {
+        // Group by Day (1..31)
+        const dayMap: Record<number, number> = {};
+        debtTransactions.forEach(t => {
+            const day = new Date(t.date).getUTCDate();
+            dayMap[day] = (dayMap[day] || 0) + t.amount;
+        });
+        
+        timelineData = Object.keys(dayMap)
+            .map(day => ({ 
+                name: `Dia ${day.padStart(2, '0')}`, 
+                sortKey: parseInt(day), 
+                Valor: dayMap[parseInt(day)] 
+            }))
+            .sort((a, b) => a.sortKey - b.sortKey);
+
+    } else {
+        // Group by Month (0..11)
+        const monthMap: Record<number, number> = {};
+        debtTransactions.forEach(t => {
+            const month = new Date(t.date).getUTCMonth();
+            monthMap[month] = (monthMap[month] || 0) + t.amount;
+        });
+
+        timelineData = Object.keys(monthMap)
+            .map(mIdx => ({ 
+                name: months[parseInt(mIdx)].substring(0, 3), // Jan, Fev...
+                sortKey: parseInt(mIdx), 
+                Valor: monthMap[parseInt(mIdx)] 
+            }))
+            .sort((a, b) => a.sortKey - b.sortKey);
+    }
 
     return {
       income,
@@ -75,7 +118,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
       allocationData,
       debtDonutData,
       debtPaymentsInPeriod,
-      totalOpenDebt
+      totalOpenDebt,
+      timelineData
     };
   }, [state.transactions, state.debts, filterMode, selectedMonth, selectedYear]);
 
@@ -191,54 +235,70 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
              )}
            </div>
         </div>
+      </div>
+      
+      {/* 3. Debt Specific Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* CHART 3: Liabilities Donut */}
-        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px] lg:col-span-2">
-           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px]">
+           <div className="flex flex-col justify-between items-start mb-6">
                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                  <Wallet className="w-4 h-4" /> Volume de Passivos (Dívidas)
                </h3>
-               <div className="text-xs font-medium text-slate-500">
+               <div className="text-xs font-medium text-slate-500 mt-2">
                   <span className="mr-3">Amortizado no Período: <strong className="text-slate-900">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</strong></span>
                   <span>Em Aberto Total: <strong className="text-red-600">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
                </div>
            </div>
            
-           <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="w-full md:w-1/2 h-[250px]">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={stats.debtDonutData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                         {/* 0: Open (Red), 1: Amortized (Dark) */}
-                         <Cell fill="#dc2626" />
-                         <Cell fill="#0f172a" />
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
-                      <Legend verticalAlign="bottom" height={36} />
-                    </PieChart>
-                 </ResponsiveContainer>
-              </div>
-              <div className="w-full md:w-1/2 space-y-4">
-                  <div className="p-4 bg-slate-50 border-l-4 border-red-600">
-                      <p className="text-xs uppercase text-slate-500 font-bold">Passivo Pendente</p>
-                      <p className="text-xl font-bold text-red-600">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Total que ainda precisa ser quitado.</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 border-l-4 border-slate-900">
-                      <p className="text-xs uppercase text-slate-500 font-bold">Esforço de Caixa (Amortização)</p>
-                      <p className="text-xl font-bold text-slate-900">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Valor alocado para dívidas no filtro selecionado.</p>
-                  </div>
-              </div>
+           <div className="h-[200px]">
+             <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.debtDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                     {/* 0: Open (Red), 1: Amortized (Dark) */}
+                     <Cell fill="#dc2626" />
+                     <Cell fill="#0f172a" />
+                  </Pie>
+                  <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+             </ResponsiveContainer>
            </div>
+        </div>
+
+        {/* CHART 4: Debt Payment Timeline (NEW) */}
+        <div className="bg-white p-6 shadow-sm border border-slate-200 min-h-[350px]">
+            <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-2">
+                <CalendarClock className="w-4 h-4" /> Cronograma de Pagamentos
+            </h3>
+            {stats.timelineData.length === 0 ? (
+                <div className="flex items-center justify-center h-[200px] text-slate-400 text-xs italic">
+                    Nenhum pagamento de dívida programado neste período.
+                </div>
+            ) : (
+                <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={stats.timelineData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" />
+                        <YAxis fontSize={10} stroke="#94a3b8" tickFormatter={(val) => `R$${val}`} width={60} />
+                        <Tooltip 
+                            cursor={{fill: '#f8fafc'}}
+                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0' }}
+                            formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Valor Pago/Prog.']}
+                        />
+                        <Bar dataKey="Valor" fill="#dc2626" barSize={30} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            )}
         </div>
 
       </div>
