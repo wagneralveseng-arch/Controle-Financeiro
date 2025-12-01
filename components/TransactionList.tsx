@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Debt } from '../types';
-import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank, Link as LinkIcon } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface TransactionListProps {
   transactions: Transaction[];
   debts: Debt[];
-  onAddTransaction: (t: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => void;
-  onUpdateTransaction: (t: Transaction) => void;
+  onAddTransaction: (t: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => Promise<void>;
+  onUpdateTransaction: (t: Transaction) => Promise<void>;
   onToggleStatus: (id: string) => void;
   onDeleteTransaction: (id: string) => void;
 }
@@ -24,6 +24,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<TransactionType>('EXPENSE');
   const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // --- Debt Linking State ---
   const [isDebtPayment, setIsDebtPayment] = useState(false);
@@ -86,73 +87,83 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
     return newTransactions;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc || !amount || !dateStr) return;
 
-    // Determine category and link
-    let finalCategory = 'General';
-    if (type === 'SAVING') finalCategory = 'Investimento';
-    if (isDebtPayment && selectedDebtId) finalCategory = 'Dívida';
+    setIsSubmitting(true);
 
-    const baseData = {
-      description: desc,
-      amount: parseFloat(amount),
-      type,
-      category: finalCategory,
-      status: 'PENDING' as const, // Default new transactions to PENDING
-      linkedDebtId: (isDebtPayment && selectedDebtId) ? selectedDebtId : undefined
-    };
+    try {
+        // Determine category and link
+        let finalCategory = 'General';
+        if (type === 'SAVING') finalCategory = 'Investimento';
+        if (isDebtPayment && selectedDebtId) finalCategory = 'Dívida';
 
-    const endDate = isRecurring && recurrenceEndMonth 
-      ? new Date(parseInt(recurrenceEndMonth.split('-')[0]), parseInt(recurrenceEndMonth.split('-')[1]), 0) 
-      : null;
+        const baseData = {
+          description: desc,
+          amount: parseFloat(amount),
+          type,
+          category: finalCategory,
+          status: 'PENDING' as const, // Default new transactions to PENDING
+          linkedDebtId: (isDebtPayment && selectedDebtId) ? selectedDebtId : undefined
+        };
 
-    if (editingId) {
-      // 1. Update the existing transaction
-      const existing = transactions.find(t => t.id === editingId);
-      onUpdateTransaction({ 
-        ...baseData, 
-        date: new Date(dateStr).toISOString(), 
-        id: editingId,
-        status: existing ? existing.status : 'PENDING' // Preserve status on edit
-      });
+        const endDate = isRecurring && recurrenceEndMonth 
+          ? new Date(parseInt(recurrenceEndMonth.split('-')[0]), parseInt(recurrenceEndMonth.split('-')[1]), 0) 
+          : null;
 
-      // 2. If recurrence is enabled during edit, generate FUTURE transactions starting from next month
-      if (isRecurring && endDate) {
-        const nextMonthDate = new Date(dateStr);
-        nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
-        
-        const futureTransactions = generateRecurringTransactions(baseData, nextMonthDate, endDate);
-        if (futureTransactions.length > 0) {
-          onAddTransaction(futureTransactions);
+        if (editingId) {
+          // 1. Update the existing transaction
+          const existing = transactions.find(t => t.id === editingId);
+          await onUpdateTransaction({ 
+            ...baseData, 
+            date: new Date(dateStr).toISOString(), 
+            id: editingId,
+            status: existing ? existing.status : 'PENDING' // Preserve status on edit
+          });
+
+          // 2. If recurrence is enabled during edit, generate FUTURE transactions starting from next month
+          if (isRecurring && endDate) {
+            const nextMonthDate = new Date(dateStr);
+            nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+            
+            const futureTransactions = generateRecurringTransactions(baseData, nextMonthDate, endDate);
+            if (futureTransactions.length > 0) {
+              await onAddTransaction(futureTransactions);
+            }
+          }
+          
+          setEditingId(null);
+        } else {
+          // Creating New
+          if (isRecurring && endDate) {
+            // Generate current + future
+            const allTransactions = generateRecurringTransactions(baseData, new Date(dateStr), endDate);
+            await onAddTransaction(allTransactions);
+          } else {
+            // Single Transaction
+            await onAddTransaction({
+              ...baseData,
+              date: new Date(dateStr).toISOString(),
+            });
+          }
         }
-      }
-      
-      setEditingId(null);
-    } else {
-      // Creating New
-      if (isRecurring && endDate) {
-        // Generate current + future
-        const allTransactions = generateRecurringTransactions(baseData, new Date(dateStr), endDate);
-        onAddTransaction(allTransactions);
-      } else {
-        // Single Transaction
-        onAddTransaction({
-          ...baseData,
-          date: new Date(dateStr).toISOString(),
-        });
-      }
-    }
 
-    // Reset Form
-    setDesc('');
-    setAmount('');
-    setIsRecurring(false);
-    setRecurrenceEndMonth('');
-    setType('EXPENSE');
-    setIsDebtPayment(false);
-    setSelectedDebtId('');
+        // Reset Form ONLY on success
+        setDesc('');
+        setAmount('');
+        setIsRecurring(false);
+        setRecurrenceEndMonth('');
+        setType('EXPENSE');
+        setIsDebtPayment(false);
+        setSelectedDebtId('');
+
+    } catch (error: any) {
+        console.error("Erro no formulário:", error);
+        alert("Erro ao salvar transação: " + (error.message || "Verifique os dados ou a conexão."));
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   // --- Filtering Logic ---
@@ -487,13 +498,14 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                )}
                <button 
                 type="submit" 
+                disabled={isSubmitting}
                 className="flex-[2] bg-slate-900 text-white py-3 font-bold uppercase text-xs hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
               >
-                {editingId ? <Save className="w-4 h-4" /> : <PlusCircle className="w-4 h-4" />}
-                {editingId 
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? <Save className="w-4 h-4" /> : <PlusCircle className="w-4 h-4" />)}
+                {isSubmitting ? 'Salvando...' : (editingId 
                   ? (isRecurring ? 'Salvar & Gerar Futuros' : 'Salvar Alterações') 
                   : (isRecurring ? 'Gerar Transações' : 'Adicionar')
-                }
+                )}
               </button>
             </div>
           </form>

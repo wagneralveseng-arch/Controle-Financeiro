@@ -90,44 +90,54 @@ const App: React.FC = () => {
 
   // --- Handlers ---
   const addTransaction = async (input: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => {
-    const items = Array.isArray(input) ? input : [input];
-    await dataService.addTransactions(items);
-    
-    // Check if any added transaction is already PAID and Linked to Debt
-    for (const item of items) {
-        if (item.status === 'PAID' && item.linkedDebtId) {
-            await handleDebtAdjustment(item.linkedDebtId, item.amount, 'PAY');
+    try {
+        const items = Array.isArray(input) ? input : [input];
+        await dataService.addTransactions(items);
+        
+        // Check if any added transaction is already PAID and Linked to Debt
+        for (const item of items) {
+            if (item.status === 'PAID' && item.linkedDebtId) {
+                await handleDebtAdjustment(item.linkedDebtId, item.amount, 'PAY');
+            }
         }
-    }
 
-    await loadData(); // Reload to get IDs and fresh state
-    setAiPlan(null);
+        await loadData(); // Reload to get IDs and fresh state
+        setAiPlan(null);
+    } catch (error) {
+        console.error("Critical Error Adding Transaction:", error);
+        throw error; // Rethrow so component can handle UI
+    }
   };
 
   const updateTransaction = async (updated: Transaction) => {
-    // 1. Logic for Linked Debts is complex on Update.
-    // To be safe, we check what changed.
-    const oldTransaction = transactions.find(t => t.id === updated.id);
-    
-    if (oldTransaction) {
-        // If it WAS paid and linked -> REVERT old impact
-        if (oldTransaction.status === 'PAID' && oldTransaction.linkedDebtId) {
-            await handleDebtAdjustment(oldTransaction.linkedDebtId, oldTransaction.amount, 'REVERT');
-        }
+    try {
+        // 1. Logic for Linked Debts is complex on Update.
+        // To be safe, we check what changed.
+        const oldTransaction = transactions.find(t => t.id === updated.id);
         
-        // If it IS now paid and linked -> APPLY new impact
-        if (updated.status === 'PAID' && updated.linkedDebtId) {
-             // Note: We await here because updateDebt modifies state.
-             // If we didn't wait, we might have race conditions.
-             // However, for UI responsiveness, we might see a flicker.
-             await handleDebtAdjustment(updated.linkedDebtId, updated.amount, 'PAY');
+        if (oldTransaction) {
+            // If it WAS paid and linked -> REVERT old impact
+            if (oldTransaction.status === 'PAID' && oldTransaction.linkedDebtId) {
+                await handleDebtAdjustment(oldTransaction.linkedDebtId, oldTransaction.amount, 'REVERT');
+            }
+            
+            // If it IS now paid and linked -> APPLY new impact
+            if (updated.status === 'PAID' && updated.linkedDebtId) {
+                // Note: We await here because updateDebt modifies state.
+                // If we didn't wait, we might have race conditions.
+                // However, for UI responsiveness, we might see a flicker.
+                await handleDebtAdjustment(updated.linkedDebtId, updated.amount, 'PAY');
+            }
         }
-    }
 
-    // Optimistic update for UI list
-    setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
-    await dataService.updateTransaction(updated);
-    setAiPlan(null);
+        // Optimistic update for UI list
+        setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
+        await dataService.updateTransaction(updated);
+        setAiPlan(null);
+    } catch (error) {
+        console.error("Critical Error Updating Transaction:", error);
+        throw error;
+    }
   }
 
   const toggleTransactionStatus = async (id: string) => {

@@ -1,6 +1,14 @@
 import { supabase } from './supabaseClient';
 import { Transaction, Debt, FinancialState } from '../types';
 
+// Helper para garantir UUID válido ou null
+const sanitizeUUID = (id: string | undefined | null) => {
+  if (!id || typeof id !== 'string') return null;
+  const trimmed = id.trim();
+  if (trimmed === '') return null;
+  return trimmed;
+};
+
 // Dados Iniciais para Semeadura (Seed) - Perfil Analista
 const INITIAL_TRANSACTIONS = [
     // VALE CLUSTER (15-30) - Dezembro 2025
@@ -104,11 +112,14 @@ export const dataService = {
         type: t.type,
         category: t.category,
         status: t.status,
-        linked_debt_id: t.linkedDebtId || null // Map to snake_case
+        linked_debt_id: sanitizeUUID(t.linkedDebtId) // Sanitize here
     }));
     
     const { error } = await supabase.from('transactions').insert(records);
-    if (error) throw error;
+    if (error) {
+        console.error("Supabase Insert Error:", error);
+        throw new Error(error.message);
+    }
   },
 
   async updateTransaction(t: Transaction) {
@@ -119,9 +130,13 @@ export const dataService = {
         type: t.type,
         category: t.category,
         status: t.status,
-        linked_debt_id: t.linkedDebtId || null
+        linked_debt_id: sanitizeUUID(t.linkedDebtId) // Sanitize here
     }).eq('id', t.id);
-    if (error) throw error;
+    
+    if (error) {
+        console.error("Supabase Update Error:", error);
+        throw new Error(error.message);
+    }
   },
 
   async deleteTransaction(id: string) {
