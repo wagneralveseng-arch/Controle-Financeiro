@@ -62,7 +62,8 @@ export const dataService = {
       amount: Number(t.amount),
       type: t.type,
       category: t.category,
-      status: t.status
+      status: t.status,
+      linkedDebtId: t.linked_debt_id // Map snake_case to camelCase
     }));
 
     const debts: Debt[] = (debtData || []).map(d => ({
@@ -102,7 +103,8 @@ export const dataService = {
         amount: t.amount,
         type: t.type,
         category: t.category,
-        status: t.status
+        status: t.status,
+        linked_debt_id: t.linkedDebtId || null // Map to snake_case
     }));
     
     const { error } = await supabase.from('transactions').insert(records);
@@ -116,7 +118,8 @@ export const dataService = {
         amount: t.amount,
         type: t.type,
         category: t.category,
-        status: t.status
+        status: t.status,
+        linked_debt_id: t.linkedDebtId || null
     }).eq('id', t.id);
     if (error) throw error;
   },

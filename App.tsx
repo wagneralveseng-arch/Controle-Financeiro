@@ -72,16 +72,59 @@ const App: React.FC = () => {
     debts
   };
 
+  // --- Logic for Debt Linking ---
+  const handleDebtAdjustment = async (debtId: string, amount: number, type: 'PAY' | 'REVERT') => {
+    const debt = debts.find(d => d.id === debtId);
+    if(!debt) return;
+    
+    // PAY: Subtract amount from remaining
+    // REVERT: Add amount back to remaining
+    const newRemaining = type === 'PAY'
+       ? Math.max(0, debt.remainingAmount - amount)
+       : debt.remainingAmount + amount;
+
+    // Use existing update logic which updates state and DB
+    await updateDebt({ ...debt, remainingAmount: newRemaining });
+  }
+
+
   // --- Handlers ---
   const addTransaction = async (input: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => {
     const items = Array.isArray(input) ? input : [input];
     await dataService.addTransactions(items);
+    
+    // Check if any added transaction is already PAID and Linked to Debt
+    for (const item of items) {
+        if (item.status === 'PAID' && item.linkedDebtId) {
+            await handleDebtAdjustment(item.linkedDebtId, item.amount, 'PAY');
+        }
+    }
+
     await loadData(); // Reload to get IDs and fresh state
     setAiPlan(null);
   };
 
   const updateTransaction = async (updated: Transaction) => {
-    // Optimistic update
+    // 1. Logic for Linked Debts is complex on Update.
+    // To be safe, we check what changed.
+    const oldTransaction = transactions.find(t => t.id === updated.id);
+    
+    if (oldTransaction) {
+        // If it WAS paid and linked -> REVERT old impact
+        if (oldTransaction.status === 'PAID' && oldTransaction.linkedDebtId) {
+            await handleDebtAdjustment(oldTransaction.linkedDebtId, oldTransaction.amount, 'REVERT');
+        }
+        
+        // If it IS now paid and linked -> APPLY new impact
+        if (updated.status === 'PAID' && updated.linkedDebtId) {
+             // Note: We await here because updateDebt modifies state.
+             // If we didn't wait, we might have race conditions.
+             // However, for UI responsiveness, we might see a flicker.
+             await handleDebtAdjustment(updated.linkedDebtId, updated.amount, 'PAY');
+        }
+    }
+
+    // Optimistic update for UI list
     setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
     await dataService.updateTransaction(updated);
     setAiPlan(null);
@@ -92,6 +135,17 @@ const App: React.FC = () => {
     if (!t) return;
     
     const newStatus = t.status === 'PAID' ? 'PENDING' : 'PAID';
+    
+    // Debt Logic
+    if (t.linkedDebtId) {
+        if (newStatus === 'PAID') {
+            await handleDebtAdjustment(t.linkedDebtId, t.amount, 'PAY');
+        } else {
+            // Unchecking (Reverting)
+            await handleDebtAdjustment(t.linkedDebtId, t.amount, 'REVERT');
+        }
+    }
+
     // Optimistic
     setTransactions(prev => prev.map(tr => tr.id === id ? { ...tr, status: newStatus } : tr));
     
@@ -100,6 +154,13 @@ const App: React.FC = () => {
   };
 
   const deleteTransaction = async (id: string) => {
+    const t = transactions.find(t => t.id === id);
+    
+    // Debt Logic: If deleting a PAID linked transaction, we must Revert (Add back debt)
+    if (t && t.status === 'PAID' && t.linkedDebtId) {
+        await handleDebtAdjustment(t.linkedDebtId, t.amount, 'REVERT');
+    }
+
     setTransactions(prev => prev.filter(t => t.id !== id));
     await dataService.deleteTransaction(id);
     setAiPlan(null);
@@ -112,6 +173,7 @@ const App: React.FC = () => {
   };
 
   const updateDebt = async (updated: Debt) => {
+    // Optimistic update
     setDebts(prev => prev.map(d => d.id === updated.id ? updated : d));
     await dataService.updateDebt(updated);
     setAiPlan(null);
@@ -123,27 +185,33 @@ const App: React.FC = () => {
     setAiPlan(null);
   };
 
-  // --- New Handler for Debt Payment ---
+  // --- Handler for Manual Debt Payment (from Debt Screen) ---
   const registerDebtPayment = async (debtId: string, amountPaid: number, date: string, createTransaction: boolean) => {
-    const debt = debts.find(d => d.id === debtId);
-    if (!debt) return;
-
-    const newRemaining = Math.max(0, debt.remainingAmount - amountPaid);
+    // Only used when paying from Debt List.
+    // If user selected "Create Transaction", we create it.
+    // That creation logic in `addTransaction` handles the debt update? 
+    // NO, usually `registerDebtPayment` manually updates debt.
+    // Let's align:
     
-    // 1. Update Debt
-    const updatedDebt = { ...debt, remainingAmount: newRemaining };
-    await updateDebt(updatedDebt);
-
-    // 2. Create Transaction (Optional)
     if (createTransaction) {
-      await addTransaction({
-        date: new Date(date).toISOString(),
-        description: `Pgto Dívida: ${debt.creditor}`,
-        amount: amountPaid,
-        type: 'EXPENSE',
-        category: 'Dívida', // Categoria específica para gráficos
-        status: 'PAID'
-      });
+        // If creating transaction, let addTransaction handle the debt update logic?
+        // No, registerDebtPayment is explicit.
+        // If we create a transaction here, we should set it as LINKED.
+        // Then `addTransaction` logic above will see it is PAID and Linked, and deduct it.
+        
+        await addTransaction({
+            date: new Date(date).toISOString(),
+            description: `Pgto Dívida (Manual)`,
+            amount: amountPaid,
+            type: 'EXPENSE',
+            category: 'Dívida', 
+            status: 'PAID',
+            linkedDebtId: debtId // LINK IT!
+        });
+        // addTransaction already calls handleDebtAdjustment('PAY'), so debt decreases.
+    } else {
+        // Just decrease debt manually without transaction
+        await handleDebtAdjustment(debtId, amountPaid, 'PAY');
     }
   };
 
@@ -242,6 +310,7 @@ const App: React.FC = () => {
           {activeTab === 'transactions' && (
             <TransactionList 
               transactions={transactions} 
+              debts={debts}
               onAddTransaction={addTransaction} 
               onUpdateTransaction={updateTransaction}
               onToggleStatus={toggleTransactionStatus}

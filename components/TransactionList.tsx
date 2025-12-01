@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { Transaction, TransactionType } from '../types';
-import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank } from 'lucide-react';
+import { Transaction, TransactionType, Debt } from '../types';
+import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank, Link as LinkIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface TransactionListProps {
   transactions: Transaction[];
+  debts: Debt[];
   onAddTransaction: (t: Omit<Transaction, 'id'> | Omit<Transaction, 'id'>[]) => void;
   onUpdateTransaction: (t: Transaction) => void;
   onToggleStatus: (id: string) => void;
   onDeleteTransaction: (id: string) => void;
 }
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTransaction, onUpdateTransaction, onToggleStatus, onDeleteTransaction }) => {
+const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, onAddTransaction, onUpdateTransaction, onToggleStatus, onDeleteTransaction }) => {
   // --- Filtering State ---
   const [filterMode, setFilterMode] = useState<'ALL' | 'MONTH'>('MONTH');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
@@ -24,6 +25,10 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
   const [type, setType] = useState<TransactionType>('EXPENSE');
   const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
   
+  // --- Debt Linking State ---
+  const [isDebtPayment, setIsDebtPayment] = useState(false);
+  const [selectedDebtId, setSelectedDebtId] = useState('');
+  
   // --- Recurrence State ---
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceEndMonth, setRecurrenceEndMonth] = useState('');
@@ -35,8 +40,16 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     setAmount(t.amount.toString());
     setType(t.type);
     setDateStr(t.date.split('T')[0]);
-    setIsRecurring(false); // Default to false, user can enable if they want to generate future copies from this edit
+    setIsRecurring(false); 
     setRecurrenceEndMonth('');
+    
+    if (t.linkedDebtId) {
+      setIsDebtPayment(true);
+      setSelectedDebtId(t.linkedDebtId);
+    } else {
+      setIsDebtPayment(false);
+      setSelectedDebtId('');
+    }
   };
 
   const cancelEdit = () => {
@@ -47,6 +60,8 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     setIsRecurring(false);
     setRecurrenceEndMonth('');
     setType('EXPENSE');
+    setIsDebtPayment(false);
+    setSelectedDebtId('');
   };
 
   const generateRecurringTransactions = (baseData: any, startFromDate: Date, endDate: Date): Omit<Transaction, 'id'>[] => {
@@ -75,12 +90,18 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     e.preventDefault();
     if (!desc || !amount || !dateStr) return;
 
+    // Determine category and link
+    let finalCategory = 'General';
+    if (type === 'SAVING') finalCategory = 'Investimento';
+    if (isDebtPayment && selectedDebtId) finalCategory = 'Dívida';
+
     const baseData = {
       description: desc,
       amount: parseFloat(amount),
       type,
-      category: type === 'SAVING' ? 'Investimento' : 'General',
-      status: 'PENDING' as const // Default new transactions to PENDING
+      category: finalCategory,
+      status: 'PENDING' as const, // Default new transactions to PENDING
+      linkedDebtId: (isDebtPayment && selectedDebtId) ? selectedDebtId : undefined
     };
 
     const endDate = isRecurring && recurrenceEndMonth 
@@ -129,7 +150,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     setAmount('');
     setIsRecurring(false);
     setRecurrenceEndMonth('');
-    setType('EXPENSE'); // Reset to default
+    setType('EXPENSE');
+    setIsDebtPayment(false);
+    setSelectedDebtId('');
   };
 
   // --- Filtering Logic ---
@@ -208,8 +231,6 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  const COLORS_CHART = ['#dc2626', '#2563eb', '#0f172a']; // Expense (Red), Saving (Blue), Margin (Dark)
-
   return (
     <div className="space-y-8">
       
@@ -249,7 +270,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
         )}
       </div>
 
-      {/* 2. Compromised Income Analysis (New Section) */}
+      {/* 2. Compromised Income Analysis */}
       <div className="bg-white border border-slate-200 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
              <PieIcon className="w-5 h-5 text-slate-900" />
@@ -257,7 +278,6 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
           </div>
           
           <div className="flex flex-col md:flex-row items-center justify-around gap-8">
-              {/* Chart */}
               <div className="w-full md:w-1/3 h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -284,7 +304,6 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                   </ResponsiveContainer>
               </div>
 
-              {/* Stats */}
               <div className="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-slate-50 p-4 border-l-4 border-slate-900">
                       <div className="flex items-center gap-2 mb-1">
@@ -385,6 +404,43 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
               </button>
             </div>
 
+            {/* Debt Linking Option (Only for Expenses) */}
+            {type === 'EXPENSE' && (
+               <div className="bg-slate-50 p-4 border border-slate-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input 
+                      type="checkbox" 
+                      id="isDebtPayment" 
+                      checked={isDebtPayment} 
+                      onChange={(e) => setIsDebtPayment(e.target.checked)}
+                      className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-slate-900"
+                    />
+                    <label htmlFor="isDebtPayment" className="text-xs font-bold text-slate-700 uppercase cursor-pointer">
+                       Amortizar Dívida?
+                    </label>
+                  </div>
+                  
+                  {isDebtPayment && (
+                    <div className="mt-2 animate-in fade-in duration-200">
+                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Selecione a Dívida</label>
+                       <select
+                         value={selectedDebtId}
+                         onChange={(e) => setSelectedDebtId(e.target.value)}
+                         className="w-full border border-slate-300 p-2 text-sm bg-white outline-none focus:border-slate-900"
+                       >
+                         <option value="">-- Selecione --</option>
+                         {debts.map(d => (
+                           <option key={d.id} value={d.id}>{d.creditor} (Restante: R$ {d.remainingAmount.toFixed(2)})</option>
+                         ))}
+                       </select>
+                       <p className="text-[10px] text-slate-500 mt-1 italic">
+                         Ao marcar como "Pago", o valor será abatido automaticamente do saldo desta dívida.
+                       </p>
+                    </div>
+                  )}
+               </div>
+            )}
+
             {/* Recurrence Options */}
             <div className={`bg-slate-50 p-4 border border-slate-100 mt-2 transition-all ${editingId ? 'border-l-4 border-l-red-600' : ''}`}>
               <div className="flex items-center gap-2 mb-3">
@@ -460,6 +516,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                 </div>
                 <TransactionTable 
                   transactions={clusters.pagamento.list} 
+                  debts={debts}
                   onEdit={handleEdit} 
                   onToggleStatus={onToggleStatus}
                   onDelete={onDeleteTransaction} 
@@ -480,6 +537,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                 </div>
                 <TransactionTable 
                   transactions={clusters.vale.list} 
+                  debts={debts}
                   onEdit={handleEdit} 
                   onToggleStatus={onToggleStatus}
                   onDelete={onDeleteTransaction} 
@@ -492,7 +550,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
 };
 
 // Sub-component for table display
-const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Transaction) => void, onToggleStatus: (id: string) => void, onDelete: (id: string) => void }> = ({ transactions, onEdit, onToggleStatus, onDelete }) => {
+const TransactionTable: React.FC<{ transactions: Transaction[], debts: Debt[], onEdit: (t: Transaction) => void, onToggleStatus: (id: string) => void, onDelete: (id: string) => void }> = ({ transactions, debts, onEdit, onToggleStatus, onDelete }) => {
     if (transactions.length === 0) {
         return <div className="p-8 text-center text-slate-400 text-sm italic">Nenhum registro neste período.</div>
     }
@@ -520,6 +578,9 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                         // Paid = Dimmed/Strikethrough if it's an outflow (Expense or Saving)
                         const isCompleted = (isExpense || isSaving) && isPaid;
 
+                        // Identify linked debt
+                        const linkedDebt = t.linkedDebtId ? debts.find(d => d.id === t.linkedDebtId) : null;
+
                         return (
                             <tr key={t.id} className={`hover:bg-slate-50 group transition-all ${isCompleted ? 'opacity-50 hover:opacity-80' : ''}`}>
                                 <td className="py-3 px-4 text-center">
@@ -531,7 +592,7 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                                             ? 'text-slate-400 hover:bg-slate-100' // Paid icon
                                             : 'text-slate-900 hover:text-slate-700 hover:bg-slate-200' // Pending icon (active)
                                         }`}
-                                        title={isPaid ? "Desmarcar" : "Marcar como Realizado"}
+                                        title={isPaid ? "Desmarcar (Estornar)" : "Marcar como Realizado (Pagar)"}
                                       >
                                           {isPaid ? <CheckCircle2 className="w-5 h-5 fill-slate-300 text-white" /> : <Circle className="w-5 h-5" />}
                                       </button>
@@ -547,6 +608,11 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                                 <td className={`py-3 px-4 font-semibold ${isCompleted ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-900'}`}>
                                     {t.description}
                                     {isSaving && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase font-bold">Poupança</span>}
+                                    {linkedDebt && (
+                                       <span className="ml-2 flex items-center gap-1 w-fit text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded-full uppercase font-bold mt-1 md:mt-0 md:inline-flex">
+                                          <LinkIcon className="w-3 h-3" /> {linkedDebt.creditor}
+                                       </span>
+                                    )}
                                 </td>
                                 <td className={`py-3 px-4 text-right font-bold ${
                                   isIncome 

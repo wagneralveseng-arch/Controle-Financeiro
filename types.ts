@@ -8,7 +8,7 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   status: 'PENDING' | 'PAID';
-  // Removed isRecurring/recurringDay to focus on Date based logic
+  linkedDebtId?: string; // ID of the debt this transaction pays off
 }
 
 export interface Debt {
