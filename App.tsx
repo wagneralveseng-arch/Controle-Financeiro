@@ -4,34 +4,66 @@ import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
 import DebtList from './components/DebtList';
 import AiPlanner from './components/AiPlanner';
-import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2 } from 'lucide-react';
+import { Auth } from './components/Auth';
+import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut } from 'lucide-react';
 import { dataService } from './services/dataService';
+import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
   // --- Global State ---
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+
+  const [loadingData, setLoadingData] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [initialBalance, setInitialBalance] = useState(0); // Fixed at 0
   const [aiPlan, setAiPlan] = useState<AIPlanResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'debts' | 'ai'>('dashboard');
 
-  // Load Data on Mount
+  // 1. Auth Logic
   useEffect(() => {
-    loadData();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoadingSession(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoadingSession(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  // 2. Data Logic (Only load when session exists)
+  useEffect(() => {
+    if (session) {
+      loadData();
+    }
+  }, [session]);
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      setLoadingData(true);
       const state = await dataService.fetchFinancialState();
       setTransactions(state.transactions);
       setDebts(state.debts);
     } catch (error) {
       console.error("Failed to load data", error);
     } finally {
-      setLoading(false);
+      setLoadingData(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setTransactions([]);
+    setDebts([]);
+    setAiPlan(null);
+    setSession(null);
   };
 
   const financialState: FinancialState = {
@@ -91,12 +123,26 @@ const App: React.FC = () => {
     setAiPlan(null);
   };
 
-  if (loading && transactions.length === 0) {
+  // --- Render Conditions ---
+
+  if (loadingSession) {
+     return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+            <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
+        </div>
+     );
+  }
+
+  if (!session) {
+    return <Auth />;
+  }
+
+  if (loadingData && transactions.length === 0) {
     return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
             <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
             <h2 className="text-xl font-bold">Sincronizando Banco de Dados...</h2>
-            <p className="text-slate-400 text-sm mt-2">Conectando ao Supabase</p>
+            <p className="text-slate-400 text-sm mt-2">Carregando perfil do usuário...</p>
         </div>
     )
   }
@@ -107,8 +153,9 @@ const App: React.FC = () => {
       {/* Sidebar Navigation - BLACK */}
       <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 sticky top-0 h-auto md:h-screen z-10">
         <div className="p-6 border-b border-slate-800">
-          <h1 className="text-xl font-bold tracking-tight text-white">ZeroDebt <span className="text-red-600">AI</span></h1>
+          <h1 className="text-xl font-bold tracking-tight text-white">Gerenciador <span className="text-red-600">Fin.</span></h1>
           <p className="text-xs text-slate-400 mt-1">Inteligência de Mercado</p>
+          <div className="mt-2 text-[10px] text-slate-500 truncate">{session.user.email}</div>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
@@ -140,8 +187,13 @@ const App: React.FC = () => {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-          Analista v2.2 - Supabase
+        <div className="p-4 border-t border-slate-800">
+           <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-2 text-red-400 hover:bg-slate-800 hover:text-red-300 transition-colors text-xs font-bold uppercase tracking-wider"
+           >
+             <LogOut className="w-4 h-4" /> Sair do Sistema
+           </button>
         </div>
       </aside>
 
