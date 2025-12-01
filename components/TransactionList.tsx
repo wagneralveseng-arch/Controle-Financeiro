@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
-import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface TransactionListProps {
@@ -46,6 +46,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     setDateStr(new Date().toISOString().split('T')[0]);
     setIsRecurring(false);
     setRecurrenceEndMonth('');
+    setType('EXPENSE');
   };
 
   const generateRecurringTransactions = (baseData: any, startFromDate: Date, endDate: Date): Omit<Transaction, 'id'>[] => {
@@ -78,7 +79,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
       description: desc,
       amount: parseFloat(amount),
       type,
-      category: 'General',
+      category: type === 'SAVING' ? 'Investimento' : 'General',
       status: 'PENDING' as const // Default new transactions to PENDING
     };
 
@@ -128,6 +129,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     setAmount('');
     setIsRecurring(false);
     setRecurrenceEndMonth('');
+    setType('EXPENSE'); // Reset to default
   };
 
   // --- Filtering Logic ---
@@ -153,17 +155,24 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
       .filter(t => t.type === 'EXPENSE')
       .reduce((acc, t) => acc + t.amount, 0);
 
-    const margin = Math.max(0, totalIncome - totalExpense);
-    const percentCompromised = totalIncome > 0 ? (totalExpense / totalIncome) * 100 : 0;
+    const totalSavings = filteredTransactions
+      .filter(t => t.type === 'SAVING')
+      .reduce((acc, t) => acc + t.amount, 0);
 
-    // Chart Data: Slice 1 = Expense, Slice 2 = Margin (Remaining Income)
-    // If Expense > Income, we show 100% Expense visually or handle specifically.
+    // Margin = Income - (Expenses + Savings)
+    const margin = Math.max(0, totalIncome - (totalExpense + totalSavings));
+    
+    const committedTotal = totalExpense + totalSavings;
+    const percentCompromised = totalIncome > 0 ? (committedTotal / totalIncome) * 100 : 0;
+
+    // Chart Data: Expense, Saving, Margin
     const chartData = [
-      { name: 'Despesas Comprometidas', value: totalExpense },
+      { name: 'Despesas', value: totalExpense },
+      { name: 'Poupança', value: totalSavings },
       { name: 'Margem Livre', value: margin }
-    ];
+    ].filter(d => d.value > 0);
 
-    return { totalIncome, totalExpense, margin, percentCompromised, chartData };
+    return { totalIncome, totalExpense, totalSavings, margin, percentCompromised, chartData };
   }, [filteredTransactions]);
 
 
@@ -181,10 +190,10 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
       return day >= 15 && day <= 29;
     });
 
-    // IMPORTANT: Only subtract expenses if they are PAID. Add all INCOME automatically.
+    // IMPORTANT: Only subtract expenses/savings if they are PAID. Add all INCOME automatically.
     const calcRealizedTotal = (list: Transaction[]) => list.reduce((acc, t) => {
         if (t.type === 'INCOME') return acc + t.amount;
-        if (t.type === 'EXPENSE' && t.status === 'PAID') return acc - t.amount;
+        if ((t.type === 'EXPENSE' || t.type === 'SAVING') && t.status === 'PAID') return acc - t.amount;
         return acc;
     }, 0);
 
@@ -199,7 +208,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  const COLORS = ['#dc2626', '#0f172a']; // Red for Expense, Dark for Margin
+  const COLORS_CHART = ['#dc2626', '#2563eb', '#0f172a']; // Expense (Red), Saving (Blue), Margin (Dark)
 
   return (
     <div className="space-y-8">
@@ -261,43 +270,51 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                         paddingAngle={2}
                         dataKey="value"
                       >
-                        {summaryStats.chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
+                        {summaryStats.chartData.map((entry, index) => {
+                          let color = '#000';
+                          if (entry.name === 'Despesas') color = '#dc2626';
+                          else if (entry.name === 'Poupança') color = '#2563eb';
+                          else color = '#0f172a';
+                          return <Cell key={`cell-${index}`} fill={color} />;
+                        })}
                       </Pie>
                       <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                      <Legend verticalAlign="bottom" height={36} />
                     </PieChart>
                   </ResponsiveContainer>
               </div>
 
               {/* Stats */}
-              <div className="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-slate-50 p-4 border-l-4 border-slate-900">
                       <div className="flex items-center gap-2 mb-1">
                           <ArrowUpCircle className="w-4 h-4 text-slate-500" />
-                          <span className="text-xs font-bold uppercase text-slate-500">Receita Total</span>
+                          <span className="text-xs font-bold uppercase text-slate-500">Receita</span>
                       </div>
-                      <p className="text-xl font-bold text-slate-900">R$ {summaryStats.totalIncome.toLocaleString('pt-BR')}</p>
-                      <p className="text-[10px] text-slate-400">Projetada no período</p>
+                      <p className="text-lg font-bold text-slate-900">R$ {summaryStats.totalIncome.toLocaleString('pt-BR')}</p>
                   </div>
 
                   <div className="bg-slate-50 p-4 border-l-4 border-red-600">
                       <div className="flex items-center gap-2 mb-1">
                           <ArrowDownCircle className="w-4 h-4 text-red-500" />
-                          <span className="text-xs font-bold uppercase text-slate-500">Despesa Total</span>
+                          <span className="text-xs font-bold uppercase text-slate-500">Despesas</span>
                       </div>
-                      <p className="text-xl font-bold text-red-600">R$ {summaryStats.totalExpense.toLocaleString('pt-BR')}</p>
-                      <p className="text-[10px] text-slate-400">Pagas + Pendentes</p>
+                      <p className="text-lg font-bold text-red-600">R$ {summaryStats.totalExpense.toLocaleString('pt-BR')}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 border-l-4 border-blue-600">
+                      <div className="flex items-center gap-2 mb-1">
+                          <PiggyBank className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs font-bold uppercase text-slate-500">Poupança</span>
+                      </div>
+                      <p className="text-lg font-bold text-blue-600">R$ {summaryStats.totalSavings.toLocaleString('pt-BR')}</p>
                   </div>
 
                   <div className={`p-4 border border-dashed text-center flex flex-col justify-center ${summaryStats.percentCompromised > 100 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-300'}`}>
-                      <span className="text-xs font-bold uppercase text-slate-500">Renda Comprometida</span>
-                      <p className={`text-2xl font-black ${summaryStats.percentCompromised > 90 ? 'text-red-600' : 'text-slate-900'}`}>
+                      <span className="text-xs font-bold uppercase text-slate-500">Comprometido</span>
+                      <p className={`text-xl font-black ${summaryStats.percentCompromised > 90 ? 'text-red-600' : 'text-slate-900'}`}>
                           {summaryStats.percentCompromised.toFixed(1)}%
                       </p>
-                      {summaryStats.percentCompromised > 100 && (
-                          <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-full mt-1 inline-block">DÉFICIT OPERACIONAL</span>
-                      )}
                   </div>
               </div>
           </div>
@@ -329,7 +346,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
                 className="w-full border-b-2 border-slate-200 p-2 focus:border-slate-900 outline-none bg-transparent transition-colors font-medium text-slate-900"
-                placeholder="Ex: Salário, Aluguel..."
+                placeholder="Ex: Salário, Aluguel, Reserva..."
               />
             </div>
             <div>
@@ -344,7 +361,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
               />
             </div>
             
-            <div className="flex gap-4 pt-2">
+            <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setType('INCOME')}
@@ -358,6 +375,13 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onAddTr
                 className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border transition-all ${type === 'EXPENSE' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
               >
                 Despesa
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('SAVING')}
+                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border transition-all ${type === 'SAVING' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
+              >
+                Poupança
               </button>
             </div>
 
@@ -487,17 +511,19 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                 <tbody className="text-sm text-slate-700 divide-y divide-slate-100">
                     {transactions.map(t => {
                         const dateObj = new Date(t.date);
+                        const isIncome = t.type === 'INCOME';
                         const isExpense = t.type === 'EXPENSE';
+                        const isSaving = t.type === 'SAVING';
+                        
                         const isPaid = t.status === 'PAID';
                         
-                        // NEW LOGIC: Paid = Dimmed/Strikethrough. Pending = Clear.
-                        // Only dim if it IS paid and IS expense (Income always clear)
-                        const isCompleted = isExpense && isPaid;
+                        // Paid = Dimmed/Strikethrough if it's an outflow (Expense or Saving)
+                        const isCompleted = (isExpense || isSaving) && isPaid;
 
                         return (
                             <tr key={t.id} className={`hover:bg-slate-50 group transition-all ${isCompleted ? 'opacity-50 hover:opacity-80' : ''}`}>
                                 <td className="py-3 px-4 text-center">
-                                    {isExpense ? (
+                                    {isExpense || isSaving ? (
                                       <button 
                                         onClick={() => onToggleStatus(t.id)}
                                         className={`p-1 rounded-full transition-colors ${
@@ -505,7 +531,7 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                                             ? 'text-slate-400 hover:bg-slate-100' // Paid icon
                                             : 'text-slate-900 hover:text-slate-700 hover:bg-slate-200' // Pending icon (active)
                                         }`}
-                                        title={isPaid ? "Desmarcar" : "Marcar como Pago"}
+                                        title={isPaid ? "Desmarcar" : "Marcar como Realizado"}
                                       >
                                           {isPaid ? <CheckCircle2 className="w-5 h-5 fill-slate-300 text-white" /> : <Circle className="w-5 h-5" />}
                                       </button>
@@ -520,15 +546,16 @@ const TransactionTable: React.FC<{ transactions: Transaction[], onEdit: (t: Tran
                                 </td>
                                 <td className={`py-3 px-4 font-semibold ${isCompleted ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-900'}`}>
                                     {t.description}
+                                    {isSaving && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase font-bold">Poupança</span>}
                                 </td>
                                 <td className={`py-3 px-4 text-right font-bold ${
-                                  !isExpense 
+                                  isIncome 
                                     ? 'text-slate-900' 
                                     : (isPaid 
-                                        ? 'text-slate-400 line-through decoration-slate-300' // Paid Expense
-                                        : 'text-red-600') // Pending Expense
+                                        ? 'text-slate-400 line-through decoration-slate-300' // Paid Outflow
+                                        : (isSaving ? 'text-blue-600' : 'text-red-600')) // Pending Outflow
                                 }`}>
-                                    {!isExpense ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    {isIncome ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </td>
                                 <td className="py-3 px-4 text-right">
                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
