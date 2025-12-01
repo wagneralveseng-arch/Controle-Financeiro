@@ -60,9 +60,9 @@ export const generateZeroDebtPlan = async (state: FinancialState): Promise<AIPla
     - Transações (Income/Expenses) com DATAS: ${JSON.stringify(transactions.map(t => ({ date: t.date, desc: t.description, amt: t.amount, type: t.type })))}
     - Dívidas Pendentes: ${JSON.stringify(debts.map(d => ({ creditor: d.creditor, remaining: d.remainingAmount, monthly: d.monthlyPayment, installmentsLeft: d.installmentsRemaining, priority: d.priority })))}
 
-    REGRA DE FLUXO DE CAIXA (CLUSTERS):
-    - Cluster "Vale": Dias 15 a 29 do mês.
-    - Cluster "Pagamento": Dias 30 e 31 + Dias 01 a 14 do mês.
+    REGRA DE FLUXO DE CAIXA (CLUSTERS - RIGOROSO):
+    1. Cluster "Vale": Recebimento dia 15. Paga contas que vencem do dia 15 até o dia 29 do mesmo mês.
+    2. Cluster "Pagamento": Recebimento dia 30 (ou 31). Paga contas que vencem do dia 30 até o dia 14 do mês seguinte.
     
     REGRA DE OURO INEGOCIÁVEL:
     O Saldo Cash Acumulado (dinheiro em conta) NUNCA pode ser negativo. Se o fluxo de caixa for insuficiente, o pagamento de dívida deve ser fracionado ou adiado.

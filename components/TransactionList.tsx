@@ -90,6 +90,12 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc || !amount || !dateStr) return;
+    
+    // Validation: Debt Payment must have selected debt
+    if (type === 'EXPENSE' && isDebtPayment && !selectedDebtId) {
+        alert("Por favor, selecione a dívida que deseja amortizar ou desmarque a opção 'Amortizar Dívida?'.");
+        return;
+    }
 
     setIsSubmitting(true);
 
@@ -160,7 +166,11 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
 
     } catch (error: any) {
         console.error("Erro no formulário:", error);
-        alert("Erro ao salvar transação: " + (error.message || "Verifique os dados ou a conexão."));
+        if (error.message && (error.message.includes('column') || error.message.includes('linked_debt_id'))) {
+             alert("Erro de Banco de Dados: A coluna 'linked_debt_id' não existe. Por favor, rode o comando SQL no Supabase conforme as instruções.");
+        } else {
+             alert("Erro ao salvar transação: " + (error.message || "Verifique os dados ou a conexão."));
+        }
     } finally {
         setIsSubmitting(false);
     }
@@ -171,8 +181,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
     let list = transactions;
     if (filterMode === 'MONTH') {
       list = list.filter(t => {
+        // Use UTC Date methods to avoid timezone shift issues (e.g. 15th becoming 14th)
         const d = new Date(t.date);
-        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+        return d.getUTCMonth() === selectedMonth && d.getUTCFullYear() === selectedYear;
       });
     }
     // Sort by date ascending
@@ -212,18 +223,23 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
 
   // --- Clustering Logic (Vale vs Pagamento) ---
   const clusters = useMemo(() => {
-    // Pagamento: Dia 30 a 14 (virada do mês)
-    const pag = filteredTransactions.filter(t => {
-      const day = new Date(t.date).getDate();
-      return day >= 30 || (day >= 1 && day <= 14);
-    });
+    // IMPORTANT: Using getUTCDate() to match the backend/ISO date exactly without timezone shifts.
     
-    // Vale: Dia 15 a 29
+    // Cluster 2: Vale
+    // Regra: Dia 15 ao Dia 29 (Inclusive)
     const vale = filteredTransactions.filter(t => {
-      const day = new Date(t.date).getDate();
+      const day = new Date(t.date).getUTCDate(); 
       return day >= 15 && day <= 29;
     });
 
+    // Cluster 1: Pagamento (Ciclo Principal)
+    // Regra: Dia 30 (ou 31) + Dias 01 a 14.
+    // Isso representa o dinheiro recebido no fim do mês que paga contas até o dia 14 do mês seguinte.
+    const pag = filteredTransactions.filter(t => {
+      const day = new Date(t.date).getUTCDate();
+      return day >= 30 || (day >= 1 && day <= 14);
+    });
+    
     // IMPORTANT: Only subtract expenses/savings if they are PAID. Add all INCOME automatically.
     const calcRealizedTotal = (list: Transaction[]) => list.reduce((acc, t) => {
         if (t.type === 'INCOME') return acc + t.amount;
@@ -514,33 +530,12 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
         {/* 4. Transaction List (Clustered) */}
         <div className="lg:col-span-2 space-y-8">
             
-            {/* Cluster: Pagamento (30 a 14) */}
-            <div className="bg-white border border-slate-200 shadow-sm">
-                <div className="bg-slate-100 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                    <div>
-                        <h4 className="font-bold text-slate-900 uppercase tracking-wide text-sm">Cluster: Pagamento</h4>
-                        <p className="text-xs text-slate-500">Dia 30 ao Dia 14</p>
-                    </div>
-                    <div className={`text-lg font-bold ${clusters.pagamento.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
-                        {clusters.pagamento.total < 0 ? '-' : ''}R$ {Math.abs(clusters.pagamento.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido Realizado)</span>
-                    </div>
-                </div>
-                <TransactionTable 
-                  transactions={clusters.pagamento.list} 
-                  debts={debts}
-                  onEdit={handleEdit} 
-                  onToggleStatus={onToggleStatus}
-                  onDelete={onDeleteTransaction} 
-                />
-            </div>
-
             {/* Cluster: Vale (15 a 29) */}
             <div className="bg-white border border-slate-200 shadow-sm">
                 <div className="bg-slate-100 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
                     <div>
                         <h4 className="font-bold text-slate-900 uppercase tracking-wide text-sm">Cluster: Vale</h4>
-                        <p className="text-xs text-slate-500">Dia 15 ao Dia 29</p>
+                        <p className="text-xs text-slate-500">Vencimentos: Dia 15 ao Dia 29</p>
                     </div>
                     <div className={`text-lg font-bold ${clusters.vale.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
                         {clusters.vale.total < 0 ? '-' : ''}R$ {Math.abs(clusters.vale.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -549,6 +544,27 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                 </div>
                 <TransactionTable 
                   transactions={clusters.vale.list} 
+                  debts={debts}
+                  onEdit={handleEdit} 
+                  onToggleStatus={onToggleStatus}
+                  onDelete={onDeleteTransaction} 
+                />
+            </div>
+
+            {/* Cluster: Pagamento (30 a 14) */}
+            <div className="bg-white border border-slate-200 shadow-sm">
+                <div className="bg-slate-100 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                        <h4 className="font-bold text-slate-900 uppercase tracking-wide text-sm">Cluster: Pagamento</h4>
+                        <p className="text-xs text-slate-500">Vencimentos: Dia 30 ao Dia 14 (Prox. Mês)</p>
+                    </div>
+                    <div className={`text-lg font-bold ${clusters.pagamento.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
+                        {clusters.pagamento.total < 0 ? '-' : ''}R$ {Math.abs(clusters.pagamento.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <span className="text-[10px] ml-2 text-slate-400 font-normal uppercase">(Líquido Realizado)</span>
+                    </div>
+                </div>
+                <TransactionTable 
+                  transactions={clusters.pagamento.list} 
                   debts={debts}
                   onEdit={handleEdit} 
                   onToggleStatus={onToggleStatus}
