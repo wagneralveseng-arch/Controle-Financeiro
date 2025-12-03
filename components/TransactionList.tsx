@@ -283,7 +283,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                                 <span className="bg-slate-800 px-1 rounded text-slate-300">{t.category}</span>
                                 {t.linkedDebtId && (
                                     <span className="flex items-center gap-1 text-red-300 bg-red-900/30 px-1 rounded border border-red-900/50">
-                                        <LinkIcon className="w-3 h-3" /> Dívida
+                                        <LinkIcon className="w-3 h-3" /> 
+                                        {/* CHANGE: Lookup Debt Creditor Name instead of just 'Dívida' */}
+                                        {debts.find(d => d.id === t.linkedDebtId)?.creditor || 'Dívida'}
                                     </span>
                                 )}
                             </div>
