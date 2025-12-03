@@ -51,33 +51,48 @@ const planSchema: Schema = {
 export const generateZeroDebtPlan = async (state: FinancialState): Promise<AIPlanResponse> => {
   const { transactions, debts, currentBalance } = state;
 
+  // Filtrar apenas transações relevantes para o futuro ou recorrentes
+  // Simplificamos os dados para não estourar o limite de tokens, focando em padrões
+  const simplifiedTransactions = transactions.map(t => ({
+    date: t.date.split('T')[0],
+    desc: t.description,
+    amt: t.amount,
+    type: t.type,
+    cat: t.category,
+    status: t.status
+  }));
+
+  const simplifiedDebts = debts.map(d => ({
+    id: d.id,
+    creditor: d.creditor,
+    remaining: d.remainingAmount,
+    rate: d.interestRate,
+    priority: d.priority
+  }));
+
   const prompt = `
-    Role: Você é um Especialista Sênior em Finanças Pessoais (Analista de Inteligência de Mercado).
-    Goal: Executar um plano rigoroso de "Zero Dívida" começando em Dezembro de 2025.
+    ATUE COMO: "Especialista em Finanças e Investimentos".
+    MISSÃO: Você é um consultor de elite contratado para executar um plano de saneamento financeiro ("Zero Dívida"). Seu objetivo é limpar o passivo para liberar fluxo de caixa para futuros investimentos.
 
-    DADOS ATUAIS (Base JSON):
-    - Saldo Inicial (Caixa): ${currentBalance.toFixed(2)}
-    - Transações (Income/Expenses) com DATAS: ${JSON.stringify(transactions.map(t => ({ date: t.date, desc: t.description, amt: t.amount, type: t.type })))}
-    - Dívidas Pendentes: ${JSON.stringify(debts.map(d => ({ creditor: d.creditor, remaining: d.remainingAmount, monthly: d.monthlyPayment, installmentsLeft: d.installmentsRemaining, priority: d.priority })))}
+    DADOS DO CLIENTE (JSON):
+    - Saldo em Caixa Atual (Real): R$ ${currentBalance.toFixed(2)}
+    - Histórico de Transações (Receitas/Despesas): ${JSON.stringify(simplifiedTransactions)}
+    - Carteira de Dívidas (Passivos): ${JSON.stringify(simplifiedDebts)}
 
-    REGRA DE FLUXO DE CAIXA (CLUSTERS - RIGOROSO):
-    1. Cluster "Vale": Recebimento dia 15. Paga contas que vencem do dia 15 até o dia 29 do mesmo mês.
-    2. Cluster "Pagamento": Recebimento dia 30 (ou 31). Paga contas que vencem do dia 30 até o dia 14 do mês seguinte.
-    
-    REGRA DE OURO INEGOCIÁVEL:
-    O Saldo Cash Acumulado (dinheiro em conta) NUNCA pode ser negativo. Se o fluxo de caixa for insuficiente, o pagamento de dívida deve ser fracionado ou adiado.
-    Priorize pagar as despesas fixas de cada Cluster antes de usar o saldo para dívidas.
+    REGRAS DE NEGÓCIO RIGOROSAS (FLUXO DE CAIXA):
+    1. O cliente opera em Ciclos Quinzenais (Clusters):
+       - Cluster "Vale": Recebe dia 15 -> Cobre contas do dia 15 ao dia 29.
+       - Cluster "Pagamento": Recebe dia 30 -> Cobre contas do dia 30 ao dia 14 do mês seguinte.
+    2. REGRA DE OURO: O Saldo Acumulado NUNCA pode ficar negativo. Se faltar dinheiro, o pagamento da dívida deve ser fracionado. Prioridade absoluta para despesas essenciais.
+    3. DATA DE INÍCIO: Considere a data atual para frente.
 
-    FUNÇÕES DE LÓGICA:
-    1. CALCULAR_FLUXO_DRE: Processe dia a dia. Some o saldo do Cluster Vale e Cluster Pagamento.
-    2. ATUALIZAR_ESTADO: Abata as dívidas com o saldo livre (Fluxo de Caixa Líquido).
-    3. PROJETAR: Estime a data final zero dívida.
+    DIRETRIZES TÁTICAS:
+    1. Analise o padrão de gastos do cliente nas transações fornecidas para projetar o fluxo futuro.
+    2. Use o método "Avalanche" (maior juros primeiro) ou "Bola de Neve" (menor valor primeiro) conforme o que liberar fluxo de caixa mais rápido neste cenário.
+    3. Se houver "Poupança" lançada nas transações, considere se ela deve ser usada para abater dívida (matematicamente mais vantajoso) ou mantida como reserva de emergência, e explique sua decisão nas notas.
 
-    TAREFA IMEDIATA:
-    1. Gere a projeção mês a mês começando em Dezembro 2025.
-    2. Utilize apenas o Fluxo de Caixa Líquido (Receitas - Despesas) para abater as dívidas, sem fundos externos.
-    
-    Output JSON format only.
+    OUTPUT ESPERADO:
+    Gere um JSON estrito seguindo o schema fornecido. Não adicione texto fora do JSON.
   `;
 
   try {
