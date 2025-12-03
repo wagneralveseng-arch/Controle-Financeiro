@@ -323,12 +323,7 @@ const App: React.FC = () => {
                  activeTab === 'fluxo' ? 'Gestão de Fluxo Diário' :
                  activeTab === 'transactions' ? 'Fluxo de Caixa (DRE)' : 'Gestão de Passivos'}
             </h2>
-            <div className="hidden md:flex items-center gap-4 text-sm font-medium text-slate-300 bg-slate-800 px-4 py-2 border border-slate-700 shadow-sm">
-                <span className="text-slate-400 uppercase text-xs font-bold tracking-wider">Saldo em Caixa:</span>
-                <span className={currentRealBalance >= 0 ? 'text-white font-bold' : 'text-red-500 font-bold'}>
-                    R$ {currentRealBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-            </div>
+            {/* Balance removed as requested */}
         </header>
 
         <div className="p-6 md:p-8 max-w-7xl mx-auto">

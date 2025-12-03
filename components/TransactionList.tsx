@@ -387,9 +387,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                       >
                         {summaryStats.chartData.map((entry, index) => {
                           let color = '#000';
-                          if (entry.name === 'Despesas') color = '#dc2626';
-                          else if (entry.name === 'Poupança') color = '#94a3b8';
-                          else color = '#f8fafc'; // Free Margin White
+                          if (entry.name === 'Despesas') color = '#facc15'; // Yellow 400
+                          else if (entry.name === 'Poupança') color = '#f8fafc'; // White/Slate 50
+                          else color = '#334155'; // Free Margin Dark Gray
                           return <Cell key={`cell-${index}`} fill={color} />;
                         })}
                       </Pie>
@@ -411,12 +411,12 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                       <p className="text-lg font-bold text-white">R$ {summaryStats.totalIncome.toLocaleString('pt-BR')}</p>
                   </div>
 
-                  <div className="bg-slate-800 p-4 border-l-4 border-red-600">
+                  <div className="bg-slate-800 p-4 border-l-4 border-yellow-500">
                       <div className="flex items-center gap-2 mb-1">
-                          <ArrowDownCircle className="w-4 h-4 text-red-500" />
+                          <ArrowDownCircle className="w-4 h-4 text-yellow-500" />
                           <span className="text-xs font-bold uppercase text-slate-400">Despesas</span>
                       </div>
-                      <p className="text-lg font-bold text-red-500">R$ {summaryStats.totalExpense.toLocaleString('pt-BR')}</p>
+                      <p className="text-lg font-bold text-yellow-500">R$ {summaryStats.totalExpense.toLocaleString('pt-BR')}</p>
                   </div>
 
                   <div className="bg-slate-800 p-4 border-l-4 border-slate-400">
@@ -427,9 +427,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                       <p className="text-lg font-bold text-slate-200">R$ {summaryStats.totalSavings.toLocaleString('pt-BR')}</p>
                   </div>
 
-                  <div className={`p-4 border border-dashed text-center flex flex-col justify-center ${summaryStats.percentCompromised > 100 ? 'bg-red-950/20 border-red-800' : 'bg-slate-900 border-slate-700'}`}>
+                  <div className={`p-4 border border-dashed text-center flex flex-col justify-center ${summaryStats.percentCompromised > 100 ? 'bg-yellow-950/20 border-yellow-800' : 'bg-slate-900 border-slate-700'}`}>
                       <span className="text-xs font-bold uppercase text-slate-400">Comprometido</span>
-                      <p className={`text-xl font-black ${summaryStats.percentCompromised > 90 ? 'text-red-500' : 'text-white'}`}>
+                      <p className={`text-xl font-black ${summaryStats.percentCompromised > 90 ? 'text-yellow-500' : 'text-white'}`}>
                           {summaryStats.percentCompromised.toFixed(1)}%
                       </p>
                   </div>
@@ -442,7 +442,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
         <div className="bg-slate-900 p-6 border border-slate-800 h-fit shadow-sm relative">
           <div className="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 uppercase tracking-tight">
-            {editingId ? <Edit2 className="w-5 h-5 text-red-600" /> : <PlusCircle className="w-5 h-5" />} 
+            {editingId ? <Edit2 className="w-5 h-5 text-yellow-500" /> : <PlusCircle className="w-5 h-5" />} 
             {editingId ? 'Editar Transação' : 'Nova Transação'}
           </h3>
           
@@ -489,7 +489,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
               <button
                 type="button"
                 onClick={() => setType('EXPENSE')}
-                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border transition-all ${type === 'EXPENSE' ? 'bg-red-600 text-white border-red-600' : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-600'}`}
+                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider border transition-all ${type === 'EXPENSE' ? 'bg-yellow-500 text-slate-900 border-yellow-500' : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-600'}`}
               >
                 Despesa
               </button>
@@ -511,7 +511,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                       id="isDebtPayment" 
                       checked={isDebtPayment} 
                       onChange={(e) => setIsDebtPayment(e.target.checked)}
-                      className="w-4 h-4 text-red-600 border-slate-600 bg-slate-900 rounded focus:ring-red-600"
+                      className="w-4 h-4 text-yellow-500 border-slate-600 bg-slate-900 rounded focus:ring-yellow-500"
                     />
                     <label htmlFor="isDebtPayment" className="text-xs font-bold text-slate-300 uppercase cursor-pointer">
                        Amortizar Dívida?
@@ -540,7 +540,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
             )}
 
             {/* Recurrence Options */}
-            <div className={`bg-slate-800 p-4 border border-slate-700 mt-2 transition-all ${editingId ? 'border-l-4 border-l-red-600' : ''}`}>
+            <div className={`bg-slate-800 p-4 border border-slate-700 mt-2 transition-all ${editingId ? 'border-l-4 border-l-yellow-500' : ''}`}>
               <div className="flex items-center gap-2 mb-3">
                 <input 
                   type="checkbox" 
@@ -565,7 +565,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                     className="w-full border border-slate-600 p-2 text-sm bg-slate-950 text-white outline-none focus:border-white"
                   />
                   {editingId && (
-                     <p className="text-[10px] text-red-500 mt-2 font-medium">
+                     <p className="text-[10px] text-yellow-500 mt-2 font-medium">
                        * Atualiza esta transação e cria cópias novas para os meses seguintes.
                      </p>
                   )}
@@ -581,7 +581,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                    className="flex-1 bg-slate-800 border border-slate-600 text-slate-300 py-3 font-bold uppercase text-xs hover:bg-slate-700 transition-colors"
                  >
                    Cancelar
-                 </button>
+                   </button>
                )}
                <button 
                 type="submit" 
@@ -610,7 +610,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                     </div>
                     <div className="text-right">
                         <p className="text-[10px] uppercase font-bold text-slate-500">Saldo Realizado</p>
-                        <span className={`font-mono font-bold ${clusters.vale.total >= 0 ? 'text-white' : 'text-red-500'}`}>R$ {clusters.vale.total.toLocaleString('pt-BR')}</span>
+                        <span className={`font-mono font-bold ${clusters.vale.total >= 0 ? 'text-white' : 'text-yellow-500'}`}>R$ {clusters.vale.total.toLocaleString('pt-BR')}</span>
                     </div>
                 </div>
                 {renderTransactionRows(clusters.vale.list)}
@@ -625,7 +625,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
                     </div>
                     <div className="text-right">
                         <p className="text-[10px] uppercase font-bold text-slate-500">Saldo Realizado</p>
-                        <span className={`font-mono font-bold ${clusters.pagamento.total >= 0 ? 'text-white' : 'text-red-500'}`}>R$ {clusters.pagamento.total.toLocaleString('pt-BR')}</span>
+                        <span className={`font-mono font-bold ${clusters.pagamento.total >= 0 ? 'text-white' : 'text-yellow-500'}`}>R$ {clusters.pagamento.total.toLocaleString('pt-BR')}</span>
                     </div>
                 </div>
                 {renderTransactionRows(clusters.pagamento.list)}

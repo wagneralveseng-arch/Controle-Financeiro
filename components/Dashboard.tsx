@@ -143,10 +143,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
     };
   }, [state.transactions, state.debts, filterMode, selectedMonth, selectedYear]);
 
-  // Colors for Dark Mode
-  const COLOR_EXPENSE_PAID = '#334155'; // Slate 700
-  const COLOR_EXPENSE_PENDING = '#dc2626'; // Red 600
-  const COLOR_SAVING = '#94a3b8'; // Slate 400
+  // Colors for Dark Mode (YELLOW / GRAY / WHITE Palette)
+  const COLOR_EXPENSE_PAID = '#475569'; // Slate 600 (Neutral/Gray)
+  const COLOR_EXPENSE_PENDING = '#facc15'; // Yellow 400 (Attention/Warning)
+  const COLOR_SAVING = '#f8fafc'; // Slate 50 (White/Bright)
 
   return (
     <div className="space-y-8">
@@ -286,7 +286,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
                </h3>
                <div className="text-xs font-medium text-slate-400 mt-2">
                   <span className="mr-3">Amortizado ({filterMode === 'ALL' ? 'Total' : 'Mês'}): <strong className="text-white">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</strong></span>
-                  <span>Em Aberto Total: <strong className="text-red-500">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
+                  <span>Em Aberto Total: <strong className="text-yellow-500">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
                </div>
            </div>
            
@@ -303,9 +303,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
                     dataKey="value"
                     stroke="none"
                   >
-                     {/* 0: Open (Red), 1: Amortized (Dark/Gray) */}
-                     <Cell fill="#dc2626" />
-                     <Cell fill="#334155" />
+                     {/* 0: Open (Yellow), 1: Amortized (Gray) */}
+                     <Cell fill={COLOR_EXPENSE_PENDING} />
+                     <Cell fill={COLOR_EXPENSE_PAID} />
                   </Pie>
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
@@ -337,7 +337,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
                             contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
                             formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Valor Pago/Prog.']}
                         />
-                        <Bar dataKey="Valor" fill="#dc2626" barSize={30} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Valor" fill={COLOR_EXPENSE_PENDING} barSize={30} radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             )}
