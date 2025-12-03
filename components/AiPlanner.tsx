@@ -34,16 +34,16 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
     <div className="space-y-6">
       
       {/* Sub Tabs */}
-      <div className="flex border-b border-slate-200 bg-white">
+      <div className="flex border-b border-slate-800 bg-slate-900">
          <button 
            onClick={() => setSubTab('OVERVIEW')}
-           className={`px-6 py-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${subTab === 'OVERVIEW' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+           className={`px-6 py-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${subTab === 'OVERVIEW' ? 'border-white text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
          >
             <Wallet className="w-4 h-4" /> Visão Geral da Carteira
          </button>
          <button 
            onClick={() => setSubTab('STRATEGY')}
-           className={`px-6 py-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${subTab === 'STRATEGY' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+           className={`px-6 py-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${subTab === 'STRATEGY' ? 'border-red-600 text-red-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
          >
             <Bot className="w-4 h-4" /> Estratégia IA
          </button>
@@ -53,46 +53,46 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
         <div className="animate-in fade-in duration-300">
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Global Balance */}
-                <div className="bg-white p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="bg-slate-900 p-6 border border-slate-800 shadow-sm flex items-center justify-between">
                 <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Disponível (Total)</p>
-                    <h3 className={`text-2xl font-bold mt-1 ${state.currentBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                    <h3 className={`text-2xl font-bold mt-1 ${state.currentBalance < 0 ? 'text-red-500' : 'text-white'}`}>
                     R$ {state.currentBalance.toLocaleString('pt-BR')}
                     </h3>
                 </div>
-                <div className="p-3 bg-slate-100 rounded-full">
+                <div className="p-3 bg-slate-800 rounded-full">
                     <Wallet className="w-6 h-6 text-slate-400" />
                 </div>
                 </div>
 
                 {/* Global Debt */}
-                <div className="bg-red-600 p-6 shadow-sm flex items-center justify-between text-white">
+                <div className="bg-red-900/20 p-6 border border-red-900/50 shadow-sm flex items-center justify-between text-white">
                 <div>
-                    <p className="text-xs font-bold text-red-200 uppercase tracking-wider">Passivo Total</p>
-                    <h3 className="text-2xl font-bold mt-1 text-white">R$ {totalDebt.toLocaleString('pt-BR')}</h3>
+                    <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Passivo Total</p>
+                    <h3 className="text-2xl font-bold mt-1 text-red-100">R$ {totalDebt.toLocaleString('pt-BR')}</h3>
                 </div>
-                <div className="p-3 bg-red-700 rounded-full">
-                    <TrendingDown className="w-6 h-6 text-white" />
+                <div className="p-3 bg-red-900/50 rounded-full">
+                    <TrendingDown className="w-6 h-6 text-red-400" />
                 </div>
                 </div>
 
                 {/* Forecast */}
-                <div className="bg-white p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="bg-slate-900 p-6 border border-slate-800 shadow-sm flex items-center justify-between">
                 <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Zero Dívida (Est.)</p>
-                    <h3 className="text-2xl font-bold mt-1 text-slate-900">
+                    <h3 className="text-2xl font-bold mt-1 text-white">
                     {currentPlan ? currentPlan.estimatedDebtFreeDate : '--/--'}
                     </h3>
                 </div>
-                <div className="p-3 bg-slate-100 rounded-full">
-                    <Target className="w-6 h-6 text-slate-600" />
+                <div className="p-3 bg-slate-800 rounded-full">
+                    <Target className="w-6 h-6 text-slate-400" />
                 </div>
                 </div>
             </div>
             
-            <div className="mt-8 bg-slate-50 p-8 text-center border border-slate-200 border-dashed">
-                <Layout className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-slate-900 font-bold uppercase tracking-wider">Gestão Global</h3>
+            <div className="mt-8 bg-slate-950 p-8 text-center border border-slate-800 border-dashed">
+                <Layout className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                <h3 className="text-white font-bold uppercase tracking-wider">Gestão Global</h3>
                 <p className="text-slate-500 text-sm mt-2 max-w-lg mx-auto">
                     Utilize esta aba para monitorar os grandes números da sua saúde financeira. 
                     Para ações táticas, alterne para a aba "Estratégia IA".
@@ -132,21 +132,21 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
             </div>
 
             {currentPlan && (
-                <div className="bg-white shadow-sm border border-slate-200">
-                    <div className="p-6 border-b border-slate-200 bg-slate-50 flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-slate-900" />
-                        <h3 className="font-bold text-slate-900 uppercase tracking-wider text-sm">Plano de Execução Tático</h3>
+                <div className="bg-slate-900 shadow-sm border border-slate-800">
+                    <div className="p-6 border-b border-slate-800 bg-slate-950 flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-white" />
+                        <h3 className="font-bold text-white uppercase tracking-wider text-sm">Plano de Execução Tático</h3>
                     </div>
                     
                     {/* Summary */}
-                    <div className="p-6 border-b border-slate-200">
+                    <div className="p-6 border-b border-slate-800">
                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Resumo Executivo</h4>
-                       <p className="text-slate-800 leading-relaxed whitespace-pre-line text-sm">{currentPlan.strategySummary}</p>
+                       <p className="text-slate-300 leading-relaxed whitespace-pre-line text-sm">{currentPlan.strategySummary}</p>
                     </div>
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="text-slate-500 bg-slate-100 border-b border-slate-200 uppercase tracking-wider text-xs">
+                            <thead className="text-slate-500 bg-slate-950 border-b border-slate-800 uppercase tracking-wider text-xs">
                                 <tr>
                                     <th className="py-4 px-6 font-bold">Mês Referência</th>
                                     <th className="py-4 px-6 font-bold text-right">Saldo Inicial</th>
@@ -156,16 +156,16 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
                                     <th className="py-4 px-6 font-bold w-1/3">Notas Operacionais</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody className="divide-y divide-slate-800">
                                 {currentPlan.projections.map((month, idx) => {
                                     const netFlow = month.totalIncome - month.fixedExpenses;
                                     
                                     return (
-                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                            <td className="py-4 px-6 font-bold text-slate-900">{month.monthLabel}</td>
-                                            <td className="py-4 px-6 text-right text-slate-500 font-mono">R$ {month.openingBalance.toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
+                                        <tr key={idx} className="hover:bg-slate-800/50 transition-colors">
+                                            <td className="py-4 px-6 font-bold text-white">{month.monthLabel}</td>
+                                            <td className="py-4 px-6 text-right text-slate-400 font-mono">R$ {month.openingBalance.toLocaleString('pt-BR', {minimumFractionDigits: 0})}</td>
                                             <td className="py-4 px-6 text-right font-mono">
-                                                <span className={netFlow >= 0 ? 'text-slate-900' : 'text-red-600'}>
+                                                <span className={netFlow >= 0 ? 'text-white' : 'text-red-500'}>
                                                     {netFlow >= 0 ? '+' : ''}{netFlow.toLocaleString('pt-BR', {minimumFractionDigits: 0})}
                                                 </span>
                                             </td>
@@ -173,20 +173,20 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
                                                 {month.debtPayments.length > 0 ? (
                                                     <ul className="space-y-1">
                                                         {month.debtPayments.map((p, i) => (
-                                                            <li key={i} className="flex justify-between items-center text-xs bg-red-50 text-red-800 px-2 py-1 border border-red-100 font-medium">
+                                                            <li key={i} className="flex justify-between items-center text-xs bg-red-900/30 text-red-200 px-2 py-1 border border-red-900/50 font-medium">
                                                                 <span>{p.creditor}</span>
                                                                 <span className="font-bold">- R${p.amount.toLocaleString('pt-BR')}</span>
                                                             </li>
                                                         ))}
                                                     </ul>
                                                 ) : (
-                                                    <span className="text-slate-300 text-xs uppercase tracking-widest">-- Sem Ação --</span>
+                                                    <span className="text-slate-600 text-xs uppercase tracking-widest">-- Sem Ação --</span>
                                                 )}
                                             </td>
-                                            <td className={`py-4 px-6 text-right font-bold font-mono ${month.closingBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                                            <td className={`py-4 px-6 text-right font-bold font-mono ${month.closingBalance < 0 ? 'text-red-500' : 'text-white'}`}>
                                                 R$ {month.closingBalance.toLocaleString('pt-BR')}
                                             </td>
-                                            <td className="py-4 px-6 text-slate-600 text-xs leading-relaxed border-l border-slate-100">
+                                            <td className="py-4 px-6 text-slate-400 text-xs leading-relaxed border-l border-slate-800">
                                                 {month.notes}
                                             </td>
                                         </tr>
@@ -196,9 +196,9 @@ const AiPlanner: React.FC<AiPlannerProps> = ({ state, onPlanGenerated, currentPl
                         </table>
                     </div>
                     
-                    <div className="p-8 bg-slate-100 border-t border-slate-200 flex justify-center">
-                        <div className="flex items-center gap-3 text-slate-900 font-bold bg-white px-6 py-3 border border-slate-200 shadow-sm">
-                            <CheckCircle className="w-5 h-5 text-slate-900" />
+                    <div className="p-8 bg-slate-950 border-t border-slate-800 flex justify-center">
+                        <div className="flex items-center gap-3 text-white font-bold bg-slate-900 px-6 py-3 border border-slate-800 shadow-sm">
+                            <CheckCircle className="w-5 h-5 text-white" />
                             <span className="uppercase tracking-wider text-sm">Liberdade Financeira Estimada:</span>
                             <span className="text-xl">{currentPlan.estimatedDebtFreeDate}</span>
                         </div>

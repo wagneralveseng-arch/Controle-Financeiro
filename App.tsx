@@ -197,18 +197,7 @@ const App: React.FC = () => {
 
   // --- Handler for Manual Debt Payment (from Debt Screen) ---
   const registerDebtPayment = async (debtId: string, amountPaid: number, date: string, createTransaction: boolean) => {
-    // Only used when paying from Debt List.
-    // If user selected "Create Transaction", we create it.
-    // That creation logic in `addTransaction` handles the debt update? 
-    // NO, usually `registerDebtPayment` manually updates debt.
-    // Let's align:
-    
     if (createTransaction) {
-        // If creating transaction, let addTransaction handle the debt update logic?
-        // No, registerDebtPayment is explicit.
-        // If we create a transaction here, we should set it as LINKED.
-        // Then `addTransaction` logic above will see it is PAID and Linked, and deduct it.
-        
         await addTransaction({
             date: new Date(date).toISOString(),
             description: `Pgto Dívida (Manual)`,
@@ -218,9 +207,7 @@ const App: React.FC = () => {
             status: 'PAID',
             linkedDebtId: debtId // LINK IT!
         });
-        // addTransaction already calls handleDebtAdjustment('PAY'), so debt decreases.
     } else {
-        // Just decrease debt manually without transaction
         await handleDebtAdjustment(debtId, amountPaid, 'PAY');
     }
   };
@@ -229,7 +216,7 @@ const App: React.FC = () => {
 
   if (loadingSession) {
      return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white">
             <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
         </div>
      );
@@ -241,7 +228,7 @@ const App: React.FC = () => {
 
   if (loadingData && transactions.length === 0) {
     return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white">
             <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
             <h2 className="text-xl font-bold">Sincronizando Banco de Dados...</h2>
             <p className="text-slate-400 text-sm mt-2">Carregando perfil do usuário...</p>
@@ -250,10 +237,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row font-sans text-slate-100">
       
       {/* Sidebar Navigation - BLACK */}
-      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 sticky top-0 h-auto md:h-screen z-10">
+      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 sticky top-0 h-auto md:h-screen z-10 border-r border-slate-800">
         <div className="p-6 border-b border-slate-800">
           <h1 className="text-xl font-bold tracking-tight text-white">Gerenciador <span className="text-red-600">Fin.</span></h1>
           <p className="text-xs text-slate-400 mt-1">Inteligência de Mercado</p>
@@ -300,16 +287,16 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-10 shadow-sm flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-slate-900 capitalize tracking-tight">
+      <main className="flex-1 overflow-y-auto h-screen bg-slate-950">
+        <header className="bg-slate-900 border-b border-slate-800 px-8 py-5 sticky top-0 z-10 shadow-sm flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-white capitalize tracking-tight">
                 {activeTab === 'ai' ? 'Centro de Estratégia' : 
                  activeTab === 'dashboard' ? 'Painel de Controle' :
                  activeTab === 'transactions' ? 'Fluxo de Caixa' : 'Gestão de Passivos'}
             </h2>
-            <div className="hidden md:flex items-center gap-4 text-sm font-medium text-slate-800 bg-white px-4 py-2 border border-slate-300 shadow-sm">
-                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider">Saldo Inicial:</span>
-                <span className={initialBalance >= 0 ? 'text-slate-900 font-bold' : 'text-red-600 font-bold'}>
+            <div className="hidden md:flex items-center gap-4 text-sm font-medium text-slate-300 bg-slate-800 px-4 py-2 border border-slate-700 shadow-sm">
+                <span className="text-slate-400 uppercase text-xs font-bold tracking-wider">Saldo Inicial:</span>
+                <span className={initialBalance >= 0 ? 'text-white font-bold' : 'text-red-500 font-bold'}>
                     R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
             </div>
