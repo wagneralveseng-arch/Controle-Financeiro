@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FinancialState, Transaction, Debt, AIPlanResponse } from './types';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
 import DebtList from './components/DebtList';
 import AiPlanner from './components/AiPlanner';
+import Fluxo from './components/Fluxo';
 import { Auth } from './components/Auth';
-import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut } from 'lucide-react';
+import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut, Activity } from 'lucide-react';
 import { dataService } from './services/dataService';
 import { supabase } from './services/supabaseClient';
 
@@ -17,9 +18,9 @@ const App: React.FC = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
-  const [initialBalance, setInitialBalance] = useState(0); // Fixed at 0
+  // initialBalance removed as state, calculated dynamically now
   const [aiPlan, setAiPlan] = useState<AIPlanResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'debts' | 'ai'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'debts' | 'ai' | 'fluxo'>('dashboard');
 
   // 1. Auth Logic
   useEffect(() => {
@@ -66,8 +67,23 @@ const App: React.FC = () => {
     setSession(null);
   };
 
+  // --- Dynamic Balance Calculation (Real-Time Cash) ---
+  const currentRealBalance = useMemo(() => {
+    return transactions.reduce((acc, t) => {
+        // Income adds to balance
+        if (t.type === 'INCOME') {
+            return acc + t.amount;
+        }
+        // Expense/Saving subtracts ONLY if PAID
+        if ((t.type === 'EXPENSE' || t.type === 'SAVING') && t.status === 'PAID') {
+            return acc - t.amount;
+        }
+        return acc;
+    }, 0);
+  }, [transactions]);
+
   const financialState: FinancialState = {
-    currentBalance: initialBalance,
+    currentBalance: currentRealBalance,
     transactions,
     debts
   };
@@ -254,11 +270,19 @@ const App: React.FC = () => {
           >
             <LayoutDashboard className="w-5 h-5" /> Visão Geral
           </button>
+          
+          <button 
+            onClick={() => setActiveTab('fluxo')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'fluxo' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <Activity className="w-5 h-5" /> Fluxo Diário
+          </button>
+
           <button 
             onClick={() => setActiveTab('transactions')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'transactions' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
           >
-            <Receipt className="w-5 h-5" /> Transações
+            <Receipt className="w-5 h-5" /> Transações (DRE)
           </button>
           <button 
             onClick={() => setActiveTab('debts')}
@@ -292,18 +316,22 @@ const App: React.FC = () => {
             <h2 className="text-2xl font-bold text-white capitalize tracking-tight">
                 {activeTab === 'ai' ? 'Centro de Estratégia' : 
                  activeTab === 'dashboard' ? 'Painel de Controle' :
-                 activeTab === 'transactions' ? 'Fluxo de Caixa' : 'Gestão de Passivos'}
+                 activeTab === 'fluxo' ? 'Gestão de Fluxo Diário' :
+                 activeTab === 'transactions' ? 'Fluxo de Caixa (DRE)' : 'Gestão de Passivos'}
             </h2>
             <div className="hidden md:flex items-center gap-4 text-sm font-medium text-slate-300 bg-slate-800 px-4 py-2 border border-slate-700 shadow-sm">
-                <span className="text-slate-400 uppercase text-xs font-bold tracking-wider">Saldo Inicial:</span>
-                <span className={initialBalance >= 0 ? 'text-white font-bold' : 'text-red-500 font-bold'}>
-                    R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <span className="text-slate-400 uppercase text-xs font-bold tracking-wider">Saldo em Caixa:</span>
+                <span className={currentRealBalance >= 0 ? 'text-white font-bold' : 'text-red-500 font-bold'}>
+                    R$ {currentRealBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
             </div>
         </header>
 
         <div className="p-6 md:p-8 max-w-7xl mx-auto">
           {activeTab === 'dashboard' && <Dashboard state={financialState} plan={aiPlan} />}
+          {activeTab === 'fluxo' && (
+             <Fluxo transactions={transactions} onAddTransaction={addTransaction} />
+          )}
           {activeTab === 'transactions' && (
             <TransactionList 
               transactions={transactions} 
