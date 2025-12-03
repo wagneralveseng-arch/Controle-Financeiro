@@ -1,15 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
-import { Wallet, PlusCircle, TrendingDown, DollarSign, CalendarClock, ShoppingBag } from 'lucide-react';
+import { Wallet, PlusCircle, TrendingDown, DollarSign, CalendarClock, ShoppingBag, Edit2, Trash2, Calendar, Save, X } from 'lucide-react';
 
 interface FluxoProps {
   transactions: Transaction[];
   onAddTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
+  onUpdateTransaction: (t: Transaction) => Promise<void>;
+  onDeleteTransaction: (id: string) => Promise<void>;
 }
 
-const Fluxo: React.FC<FluxoProps> = ({ transactions, onAddTransaction }) => {
+const Fluxo: React.FC<FluxoProps> = ({ transactions, onAddTransaction, onUpdateTransaction, onDeleteTransaction }) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Form State
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
+  const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]); // Default Today
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- 1. Identify Current Cluster & Date Range ---
@@ -69,34 +76,83 @@ const Fluxo: React.FC<FluxoProps> = ({ transactions, onAddTransaction }) => {
       .reduce((acc, t) => acc + t.amount, 0);
 
     const availableCash = income - committed;
-    // "Real Free" considers pending bills too, but user asked for "Money Left from Transactions" (Cash flow view)
-    // We will show Available Cash (Real) and maybe a warning about pending.
 
     return { income, committed, availableCash, pendingBills, clusterTrans };
   }, [transactions, currentClusterInfo]);
 
-  // --- 3. Handle Quick Add ---
-  const handleQuickAdd = async (e: React.FormEvent) => {
+  // --- 3. Handlers ---
+
+  const handleEdit = (t: Transaction) => {
+    setEditingId(t.id);
+    setDesc(t.description);
+    setAmount(t.amount.toString());
+    setDateStr(t.date.split('T')[0]);
+    // Scroll to top to see form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setDesc('');
+    setAmount('');
+    setDateStr(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!desc || !amount) return;
+    if (!desc || !amount || !dateStr) return;
 
     setIsSubmitting(true);
     try {
-      await onAddTransaction({
-        date: new Date().toISOString(), // NOW
-        description: desc,
-        amount: parseFloat(amount),
-        type: 'EXPENSE',
-        category: 'Fluxo Variável', // Auto category
-        status: 'PAID', // AUTO PAID as requested
-      });
+      const payloadDate = new Date(dateStr);
+      // Preserve current time if today, or set to noon to avoid timezone shift on simple date pick
+      const now = new Date();
+      if (dateStr === now.toISOString().split('T')[0]) {
+          payloadDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+      } else {
+          payloadDate.setHours(12, 0, 0);
+      }
+
+      if (editingId) {
+        // UPDATE
+        const original = transactions.find(t => t.id === editingId);
+        if (original) {
+            await onUpdateTransaction({
+                ...original,
+                description: desc,
+                amount: parseFloat(amount),
+                date: payloadDate.toISOString()
+            });
+        }
+        setEditingId(null);
+      } else {
+        // CREATE
+        await onAddTransaction({
+            date: payloadDate.toISOString(),
+            description: desc,
+            amount: parseFloat(amount),
+            type: 'EXPENSE',
+            category: 'Fluxo Variável',
+            status: 'PAID',
+        });
+      }
+
+      // Reset Form
       setDesc('');
       setAmount('');
+      setDateStr(new Date().toISOString().split('T')[0]); // Reset to today
+
     } catch (error) {
-      alert("Erro ao adicionar gasto.");
+      alert("Erro ao salvar transação.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDelete = async (id: string) => {
+      if (confirm("Tem certeza que deseja excluir este gasto? O valor retornará ao saldo disponível.")) {
+          await onDeleteTransaction(id);
+      }
   };
 
   return (
@@ -138,43 +194,72 @@ const Fluxo: React.FC<FluxoProps> = ({ transactions, onAddTransaction }) => {
         </div>
 
         {/* INPUT FORM */}
-        <div className="bg-slate-900 border border-slate-800 p-8 shadow-lg flex flex-col justify-center">
+        <div className={`bg-slate-900 border p-8 shadow-lg flex flex-col justify-center transition-colors ${editingId ? 'border-red-600' : 'border-slate-800'}`}>
            <h3 className="text-lg font-bold text-white uppercase tracking-tight mb-6 flex items-center gap-2">
-             <ShoppingBag className="w-5 h-5 text-red-500" />
-             Registrar Gasto Rápido
+             {editingId ? <Edit2 className="w-5 h-5 text-red-500" /> : <ShoppingBag className="w-5 h-5 text-red-500" />}
+             {editingId ? 'Editar Gasto' : 'Registrar Gasto Rápido'}
            </h3>
            
-           <form onSubmit={handleQuickAdd} className="space-y-4">
+           <form onSubmit={handleSubmit} className="space-y-4">
               <div>
+                 <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">O que você comprou?</label>
                  <input 
                    type="text" 
                    value={desc}
                    onChange={(e) => setDesc(e.target.value)}
-                   placeholder="Com o que você gastou?"
+                   placeholder="Descrição..."
                    className="w-full bg-slate-950 border-b-2 border-slate-700 p-3 text-white placeholder-slate-600 focus:border-white outline-none transition-colors"
-                   autoFocus
+                   autoFocus={!editingId}
                  />
               </div>
-              <div className="relative">
-                 <span className="absolute left-3 top-3 text-slate-500 font-bold">R$</span>
-                 <input 
-                   type="number" 
-                   step="0.01"
-                   value={amount}
-                   onChange={(e) => setAmount(e.target.value)}
-                   placeholder="0.00"
-                   className="w-full bg-slate-950 border-b-2 border-slate-700 p-3 pl-10 text-xl font-bold text-white placeholder-slate-700 focus:border-red-500 outline-none transition-colors"
-                 />
+              
+              <div className="flex gap-4">
+                  <div className="w-1/3">
+                      <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Data</label>
+                      <div className="relative">
+                          <input 
+                            type="date" 
+                            value={dateStr}
+                            onChange={(e) => setDateStr(e.target.value)}
+                            className="w-full bg-slate-950 border-b-2 border-slate-700 p-3 text-sm text-white focus:border-white outline-none transition-colors"
+                          />
+                      </div>
+                  </div>
+                  <div className="w-2/3">
+                      <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Valor Total</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-3 text-slate-500 font-bold">R$</span>
+                        <input 
+                            type="number" 
+                            step="0.01"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-slate-950 border-b-2 border-slate-700 p-3 pl-10 text-xl font-bold text-white placeholder-slate-700 focus:border-red-500 outline-none transition-colors"
+                        />
+                      </div>
+                  </div>
               </div>
 
-              <button 
-                type="submit"
-                disabled={isSubmitting || !desc || !amount}
-                className="w-full bg-white text-slate-950 font-bold uppercase text-xs py-4 hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 mt-4"
-              >
-                 {isSubmitting ? 'Registrando...' : 'Confirmar Gasto (Pago)'}
-                 <PlusCircle className="w-4 h-4" />
-              </button>
+              <div className="flex gap-2 mt-4">
+                  {editingId && (
+                      <button 
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="flex-1 bg-slate-800 border border-slate-600 text-slate-300 font-bold uppercase text-xs py-4 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                         <X className="w-4 h-4" /> Cancelar
+                      </button>
+                  )}
+                  <button 
+                    type="submit"
+                    disabled={isSubmitting || !desc || !amount}
+                    className="flex-[2] bg-white text-slate-950 font-bold uppercase text-xs py-4 hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                     {isSubmitting ? 'Salvando...' : (editingId ? 'Salvar Alteração' : 'Confirmar Gasto (Pago)')}
+                     {editingId ? <Save className="w-4 h-4" /> : <PlusCircle className="w-4 h-4" />}
+                  </button>
+              </div>
            </form>
         </div>
 
@@ -191,21 +276,42 @@ const Fluxo: React.FC<FluxoProps> = ({ transactions, onAddTransaction }) => {
                .filter(t => t.type === 'EXPENSE' && t.status === 'PAID' && t.category === 'Fluxo Variável')
                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                .map(t => (
-                 <div key={t.id} className="p-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                 <div key={t.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-800/50 transition-colors gap-4 group">
                     <div className="flex items-center gap-4">
-                       <div className="p-2 bg-slate-800 rounded text-slate-400">
+                       <div className="p-2 bg-slate-800 rounded text-slate-400 group-hover:bg-slate-700 group-hover:text-white transition-colors">
                           <TrendingDown className="w-5 h-5" />
                        </div>
                        <div>
-                          <p className="font-bold text-white">{t.description}</p>
-                          <p className="text-[10px] text-slate-500 uppercase font-bold">
-                             {new Date(t.date).toLocaleDateString('pt-BR')} • {new Date(t.date).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                          <p className={`font-bold ${editingId === t.id ? 'text-red-500' : 'text-white'}`}>{t.description}</p>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-2">
+                             <Calendar className="w-3 h-3" />
+                             {new Date(t.date).toLocaleDateString('pt-BR')}
                           </p>
                        </div>
                     </div>
-                    <span className="text-red-500 font-mono font-bold text-lg">
-                       - R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                    </span>
+                    
+                    <div className="flex items-center gap-6 justify-between md:justify-end w-full md:w-auto pl-14 md:pl-0">
+                        <span className="text-red-500 font-mono font-bold text-lg">
+                        - R$ {t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </span>
+
+                        <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                                onClick={() => handleEdit(t)}
+                                className="p-2 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-sm transition-colors"
+                                title="Editar Gasto"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={() => handleDelete(t.id)}
+                                className="p-2 bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-slate-700 rounded-sm transition-colors"
+                                title="Excluir Gasto"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                  </div>
                ))}
                

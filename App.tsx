@@ -330,7 +330,12 @@ const App: React.FC = () => {
         <div className="p-6 md:p-8 max-w-7xl mx-auto">
           {activeTab === 'dashboard' && <Dashboard state={financialState} plan={aiPlan} />}
           {activeTab === 'fluxo' && (
-             <Fluxo transactions={transactions} onAddTransaction={addTransaction} />
+             <Fluxo 
+               transactions={transactions} 
+               onAddTransaction={addTransaction}
+               onUpdateTransaction={updateTransaction}
+               onDeleteTransaction={deleteTransaction} 
+             />
           )}
           {activeTab === 'transactions' && (
             <TransactionList 
