@@ -5,9 +5,9 @@ import TransactionList from './components/TransactionList';
 import DebtList from './components/DebtList';
 import AiPlanner from './components/AiPlanner';
 import Fluxo from './components/Fluxo';
-import MarketWidgets from './components/MarketWidgets'; // IMPORT
+import MarketWidgets from './components/MarketWidgets';
 import { Auth } from './components/Auth';
-import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut, Activity } from 'lucide-react';
+import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut, Activity, Sun, Moon } from 'lucide-react';
 import { dataService } from './services/dataService';
 import { supabase } from './services/supabaseClient';
 
@@ -15,13 +15,35 @@ const App: React.FC = () => {
   // --- Global State ---
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  
+  // Theme State
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   const [loadingData, setLoadingData] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
-  // initialBalance removed as state, calculated dynamically now
   const [aiPlan, setAiPlan] = useState<AIPlanResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'debts' | 'ai' | 'fluxo'>('dashboard');
+
+  // 0. Theme Initialization
+  useEffect(() => {
+    // Check local storage or system preference
+    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    } else {
+      setTheme('dark'); // Default to dark as per user preference
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
 
   // 1. Auth Logic
   useEffect(() => {
@@ -233,7 +255,7 @@ const App: React.FC = () => {
 
   if (loadingSession) {
      return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors">
             <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
         </div>
      );
@@ -245,56 +267,69 @@ const App: React.FC = () => {
 
   if (loadingData && transactions.length === 0) {
     return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors">
             <Loader2 className="w-12 h-12 animate-spin mb-4 text-red-600" />
             <h2 className="text-xl font-bold">Sincronizando Banco de Dados...</h2>
-            <p className="text-slate-400 text-sm mt-2">Carregando perfil do usuário...</p>
+            <p className="text-slate-500 text-sm mt-2">Carregando perfil do usuário...</p>
         </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row font-sans text-slate-100">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row font-sans text-slate-900 dark:text-slate-100 transition-colors">
       
-      {/* Sidebar Navigation - BLACK */}
-      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 sticky top-0 h-auto md:h-screen z-10 border-r border-slate-800">
-        <div className="p-6 border-b border-slate-800">
-          <h1 className="text-xl font-bold tracking-tight text-white">Gerenciador <span className="text-red-600">Fin.</span></h1>
-          <p className="text-xs text-slate-400 mt-1">Inteligência de Mercado</p>
-          <div className="mt-2 text-[10px] text-slate-500 truncate">{session.user.email}</div>
+      {/* Sidebar Navigation */}
+      <aside className="w-full md:w-64 bg-white dark:bg-slate-900 text-slate-900 dark:text-white flex flex-col flex-shrink-0 sticky top-0 h-auto md:h-screen z-10 border-r border-slate-200 dark:border-slate-800 transition-colors shadow-sm">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Gerenciador <span className="text-red-600">Fin.</span></h1>
+            <p className="text-xs text-slate-500 mt-1">Inteligência de Mercado</p>
+          </div>
+        </div>
+
+        {/* User & Theme Toggle */}
+        <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+           <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{session.user.email}</div>
+           <button 
+             onClick={toggleTheme}
+             className="p-2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+             title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
+           >
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+           </button>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'dashboard' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'dashboard' ? 'border-red-600 bg-slate-100 dark:bg-slate-800 font-medium' : 'border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <LayoutDashboard className="w-5 h-5" /> Visão Geral
           </button>
           
           <button 
             onClick={() => setActiveTab('fluxo')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'fluxo' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'fluxo' ? 'border-red-600 bg-slate-100 dark:bg-slate-800 font-medium' : 'border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <Activity className="w-5 h-5" /> Fluxo Diário
           </button>
 
           <button 
             onClick={() => setActiveTab('transactions')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'transactions' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'transactions' ? 'border-red-600 bg-slate-100 dark:bg-slate-800 font-medium' : 'border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <Receipt className="w-5 h-5" /> Transações (DRE)
           </button>
           <button 
             onClick={() => setActiveTab('debts')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'debts' ? 'border-red-600 bg-slate-800 text-white font-medium' : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'debts' ? 'border-red-600 bg-slate-100 dark:bg-slate-800 font-medium' : 'border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <Wallet className="w-5 h-5" /> Passivos (Dívidas)
           </button>
-          <div className="pt-4 mt-4 border-t border-slate-800">
+          <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
             <button 
                 onClick={() => setActiveTab('ai')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'ai' ? 'border-white bg-slate-800 text-white font-bold' : 'border-transparent text-slate-300 hover:bg-slate-800'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-none transition-all border-l-4 ${activeTab === 'ai' ? 'border-slate-900 dark:border-white bg-slate-200 dark:bg-slate-800 font-bold' : 'border-transparent text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
             >
                 <BrainCircuit className="w-5 h-5" /> Executar Plano
             </button>
@@ -304,10 +339,10 @@ const App: React.FC = () => {
         {/* MARKET WIDGETS SECTION */}
         <MarketWidgets />
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
            <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2 text-red-400 hover:bg-slate-800 hover:text-red-300 transition-colors text-xs font-bold uppercase tracking-wider"
+            className="w-full flex items-center gap-3 px-4 py-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 hover:text-red-600 dark:hover:text-red-300 transition-colors text-xs font-bold uppercase tracking-wider"
            >
              <LogOut className="w-4 h-4" /> Sair do Sistema
            </button>
@@ -315,19 +350,18 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto h-screen bg-slate-950">
-        <header className="bg-slate-900 border-b border-slate-800 px-8 py-5 sticky top-0 z-10 shadow-sm flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-white capitalize tracking-tight">
+      <main className="flex-1 overflow-y-auto h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
+        <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-5 sticky top-0 z-10 shadow-sm flex justify-between items-center transition-colors">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white capitalize tracking-tight">
                 {activeTab === 'ai' ? 'Centro de Estratégia' : 
                  activeTab === 'dashboard' ? 'Painel de Controle' :
                  activeTab === 'fluxo' ? 'Gestão de Fluxo Diário' :
                  activeTab === 'transactions' ? 'Fluxo de Caixa (DRE)' : 'Gestão de Passivos'}
             </h2>
-            {/* Balance removed as requested */}
         </header>
 
         <div className="p-6 md:p-8 max-w-7xl mx-auto">
-          {activeTab === 'dashboard' && <Dashboard state={financialState} plan={aiPlan} />}
+          {activeTab === 'dashboard' && <Dashboard state={financialState} plan={aiPlan} isDarkMode={theme === 'dark'} />}
           {activeTab === 'fluxo' && (
              <Fluxo 
                transactions={transactions} 

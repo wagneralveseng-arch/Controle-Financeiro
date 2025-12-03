@@ -6,9 +6,10 @@ import { Wallet, TrendingDown, ArrowUpCircle, ArrowDownCircle, Flame, Calendar, 
 interface DashboardProps {
   state: FinancialState;
   plan: AIPlanResponse | null;
+  isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, plan, isDarkMode }) => {
   // --- Filter State ---
   const [filterMode, setFilterMode] = useState<'ALL' | 'MONTH'>('MONTH');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
@@ -20,7 +21,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
   ];
 
   // --- 1. SPECIAL DATA FOR MAIN CHART (HISTORY/PROJECTION) ---
-  // This data ignores the filters to show the full timeline evolution of Expenses/Savings
   const historyData = useMemo(() => {
     const groups: Record<string, any> = {};
 
@@ -51,16 +51,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
 
     // Convert to array and sort by date key
     return Object.values(groups).sort((a: any, b: any) => a.sortKey.localeCompare(b.sortKey));
-  }, [state.transactions]); // Dependencies: Only transactions, NOT filters
+  }, [state.transactions]); 
 
 
-  // --- 2. Calculate Metrics based on filter (For other cards/charts) ---
+  // --- 2. Calculate Metrics based on filter ---
   const stats = useMemo(() => {
     let filteredTransactions = state.transactions;
     
     if (filterMode === 'MONTH') {
       filteredTransactions = state.transactions.filter(t => {
-        // Use UTC to avoid timezone issues
         const d = new Date(t.date);
         return d.getUTCMonth() === selectedMonth && d.getUTCFullYear() === selectedYear;
       });
@@ -90,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
        { name: 'Amortizado', value: debtPaymentsInPeriod }
     ];
 
-    // Debt Schedule Timeline (Bar Chart)
+    // Debt Schedule Timeline
     const debtTransactions = filteredTransactions.filter(t => 
        t.type === 'EXPENSE' && 
        (t.linkedDebtId || t.category === 'Dívida' || t.description.toLowerCase().includes('dívida') || t.description.toLowerCase().includes('parcelamento'))
@@ -143,31 +142,48 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
     };
   }, [state.transactions, state.debts, filterMode, selectedMonth, selectedYear]);
 
-  // Colors for Dark Mode (YELLOW / GRAY / WHITE Palette)
-  const COLOR_EXPENSE_PAID = '#475569'; // Slate 600 (Neutral/Gray)
-  const COLOR_EXPENSE_PENDING = '#facc15'; // Yellow 400 (Attention/Warning)
-  const COLOR_SAVING = '#f8fafc'; // Slate 50 (White/Bright)
+  // Colors Palette
+  const COLOR_EXPENSE_PAID = isDarkMode ? '#475569' : '#94a3b8'; // Slate 600/400
+  const COLOR_EXPENSE_PENDING = '#facc15'; // Yellow 400
+  const COLOR_SAVING = isDarkMode ? '#f8fafc' : '#3b82f6'; // White in dark, Blue in light
+  
+  // Recharts styling props based on theme
+  const chartProps = {
+    grid: { stroke: isDarkMode ? '#334155' : '#e2e8f0', strokeDasharray: '3 3' },
+    axis: { stroke: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 12 },
+    tooltip: { 
+        contentStyle: { 
+            backgroundColor: isDarkMode ? '#0f172a' : '#ffffff', 
+            border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0', 
+            color: isDarkMode ? '#fff' : '#0f172a',
+            borderRadius: '4px',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+        },
+        cursor: { fill: isDarkMode ? '#1e293b' : '#f1f5f9' }
+    },
+    legend: { wrapperStyle: { color: isDarkMode ? '#cbd5e1' : '#475569' } }
+  };
 
   return (
     <div className="space-y-8">
       
-      {/* 1. Filter Bar (Affects cards below, NOT the first chart) */}
-      <div className="bg-slate-900 p-4 border border-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+      {/* 1. Filter Bar */}
+      <div className="bg-white dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 transition-colors rounded-sm">
         <div className="flex items-center gap-4">
-           <div className="flex items-center gap-2 text-slate-300 font-bold uppercase tracking-wider text-sm">
+           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-300 font-bold uppercase tracking-wider text-sm">
              <Filter className="w-5 h-5" />
              Filtros de Análise (Métricas)
            </div>
            <div className="flex gap-2">
               <button 
                 onClick={() => setFilterMode('ALL')}
-                className={`px-3 py-1 text-xs font-bold uppercase border border-slate-700 ${filterMode === 'ALL' ? 'bg-slate-100 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 text-xs font-bold uppercase border border-slate-200 dark:border-slate-700 transition-colors ${filterMode === 'ALL' ? 'bg-slate-100 dark:bg-slate-100 text-slate-900' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 Geral
               </button>
               <button 
                 onClick={() => setFilterMode('MONTH')}
-                className={`px-3 py-1 text-xs font-bold uppercase border border-slate-700 ${filterMode === 'MONTH' ? 'bg-slate-100 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 text-xs font-bold uppercase border border-slate-200 dark:border-slate-700 transition-colors ${filterMode === 'MONTH' ? 'bg-slate-100 dark:bg-slate-100 text-slate-900' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 Mês
               </button>
@@ -179,7 +195,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
             <select 
               value={selectedMonth} 
               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="border border-slate-700 p-2 text-sm font-medium bg-slate-950 text-white outline-none focus:border-white min-w-[120px]"
+              className="border border-slate-200 dark:border-slate-700 p-2 text-sm font-medium bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-white min-w-[120px] transition-colors"
             >
               {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
             </select>
@@ -187,7 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
               type="number" 
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="border border-slate-700 p-2 w-24 text-sm font-medium bg-slate-950 text-white outline-none focus:border-white"
+              className="border border-slate-200 dark:border-slate-700 p-2 w-24 text-sm font-medium bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-white transition-colors"
             />
           </div>
         )}
@@ -196,36 +212,30 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
       {/* 2. Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* CHART 1: Timeline Evolution (Projected Expenses) */}
-        {/* THIS CHART IS INDEPENDENT OF FILTERS */}
-        <div className="bg-slate-900 p-6 shadow-sm border border-slate-800 min-h-[350px]">
+        {/* CHART 1: Timeline */}
+        <div className="bg-white dark:bg-slate-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[350px] transition-colors rounded-sm">
            <div className="flex justify-between items-start mb-6">
-               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+               <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
                  <BarChart3 className="w-4 h-4" /> Evolução de Saídas (Histórico & Projetado)
                </h3>
-               <span className="text-[10px] text-slate-500 bg-slate-950 px-2 py-1 border border-slate-800 rounded">
+               <span className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-950 px-2 py-1 border border-slate-200 dark:border-slate-800 rounded">
                  Todos os Meses
                </span>
            </div>
            
            {historyData.length === 0 ? (
-                <div className="flex items-center justify-center h-[200px] text-slate-500 text-xs italic">
+                <div className="flex items-center justify-center h-[200px] text-slate-400 text-xs italic">
                     Sem dados para projeção.
                 </div>
             ) : (
                <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={historyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="name" fontSize={12} stroke="#94a3b8" />
-                    <YAxis fontSize={12} stroke="#94a3b8" />
-                    <Tooltip 
-                       cursor={{fill: '#1e293b'}}
-                       contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
-                       formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
-                    />
-                    <Legend wrapperStyle={{ color: '#cbd5e1' }} />
+                    <CartesianGrid {...chartProps.grid} />
+                    <XAxis dataKey="name" {...chartProps.axis} />
+                    <YAxis {...chartProps.axis} />
+                    <Tooltip {...chartProps.tooltip} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                    <Legend {...chartProps.legend} />
                     
-                    {/* Stack Output: Paid Expense, Pending Expense, Savings */}
                     <Bar dataKey="Despesas Pagas" stackId="b" fill={COLOR_EXPENSE_PAID} barSize={40} />
                     <Bar dataKey="Despesas Pendentes" stackId="b" fill={COLOR_EXPENSE_PENDING} barSize={40} />
                     <Bar dataKey="Poupança" stackId="b" fill={COLOR_SAVING} barSize={40} />
@@ -234,14 +244,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
             )}
         </div>
 
-        {/* CHART 2: Allocation (Expenses vs Savings) - AFFECTED BY FILTER */}
-        <div className="bg-slate-900 p-6 shadow-sm border border-slate-800 min-h-[350px]">
-           <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2">
+        {/* CHART 2: Allocation */}
+        <div className="bg-white dark:bg-slate-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[350px] transition-colors rounded-sm">
+           <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-6 uppercase tracking-wider flex items-center gap-2">
              <ArrowDownCircle className="w-4 h-4" /> Alocação de Recursos ({filterMode === 'ALL' ? 'Geral' : `${months[selectedMonth]}`})
            </h3>
            <div className="flex items-center justify-center h-[250px]">
              {stats.allocationData.length === 0 ? (
-               <p className="text-slate-500 text-xs italic">Sem saídas registradas neste período.</p>
+               <p className="text-slate-400 text-xs italic">Sem saídas registradas neste período.</p>
              ) : (
                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -259,15 +269,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
                          let color;
                          if (entry.name === 'Despesas Pagas') color = COLOR_EXPENSE_PAID;
                          else if (entry.name === 'Despesas Pendentes') color = COLOR_EXPENSE_PENDING;
-                         else color = COLOR_SAVING; // Savings
+                         else color = COLOR_SAVING; 
                          return <Cell key={`cell-${index}`} fill={color} />
                       })}
                     </Pie>
-                    <Tooltip 
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
-                        formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} 
-                    />
-                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ color: '#cbd5e1' }} />
+                    <Tooltip {...chartProps.tooltip} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                    <Legend verticalAlign="bottom" height={36} {...chartProps.legend} />
                   </PieChart>
                </ResponsiveContainer>
              )}
@@ -275,18 +282,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
         </div>
       </div>
       
-      {/* 3. Debt Specific Charts Row */}
+      {/* 3. Debt Specific Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* CHART 3: Liabilities Donut */}
-        <div className="bg-slate-900 p-6 shadow-sm border border-slate-800 min-h-[350px]">
+        <div className="bg-white dark:bg-slate-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[350px] transition-colors rounded-sm">
            <div className="flex flex-col justify-between items-start mb-6">
-               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+               <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
                  <Wallet className="w-4 h-4" /> Volume de Passivos (Dívidas)
                </h3>
-               <div className="text-xs font-medium text-slate-400 mt-2">
-                  <span className="mr-3">Amortizado ({filterMode === 'ALL' ? 'Total' : 'Mês'}): <strong className="text-white">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</strong></span>
-                  <span>Em Aberto Total: <strong className="text-yellow-500">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
+               <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
+                  <span className="mr-3">Amortizado ({filterMode === 'ALL' ? 'Total' : 'Mês'}): <strong className="text-slate-800 dark:text-white">R$ {stats.debtPaymentsInPeriod.toLocaleString('pt-BR')}</strong></span>
+                  <span>Em Aberto Total: <strong className="text-yellow-600 dark:text-yellow-500">R$ {stats.totalOpenDebt.toLocaleString('pt-BR')}</strong></span>
                </div>
            </div>
            
@@ -303,40 +310,32 @@ const Dashboard: React.FC<DashboardProps> = ({ state, plan }) => {
                     dataKey="value"
                     stroke="none"
                   >
-                     {/* 0: Open (Yellow), 1: Amortized (Gray) */}
                      <Cell fill={COLOR_EXPENSE_PENDING} />
                      <Cell fill={COLOR_EXPENSE_PAID} />
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
-                    formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} 
-                  />
-                  <Legend verticalAlign="bottom" height={36} wrapperStyle={{ color: '#cbd5e1' }} />
+                  <Tooltip {...chartProps.tooltip} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                  <Legend verticalAlign="bottom" height={36} {...chartProps.legend} />
                 </PieChart>
              </ResponsiveContainer>
            </div>
         </div>
 
-        {/* CHART 4: Debt Payment Timeline (NEW) */}
-        <div className="bg-slate-900 p-6 shadow-sm border border-slate-800 min-h-[350px]">
-            <h3 className="text-sm font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2">
+        {/* CHART 4: Debt Payment Timeline */}
+        <div className="bg-white dark:bg-slate-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[350px] transition-colors rounded-sm">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-6 uppercase tracking-wider flex items-center gap-2">
                 <CalendarClock className="w-4 h-4" /> Cronograma de Pagamentos
             </h3>
             {stats.timelineData.length === 0 ? (
-                <div className="flex items-center justify-center h-[200px] text-slate-500 text-xs italic">
+                <div className="flex items-center justify-center h-[200px] text-slate-400 text-xs italic">
                     Nenhum pagamento de dívida programado neste período.
                 </div>
             ) : (
                 <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={stats.timelineData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" />
-                        <YAxis fontSize={10} stroke="#94a3b8" tickFormatter={(val) => `R$${val}`} width={60} />
-                        <Tooltip 
-                            cursor={{fill: '#1e293b'}}
-                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff' }}
-                            formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Valor Pago/Prog.']}
-                        />
+                        <CartesianGrid {...chartProps.grid} />
+                        <XAxis dataKey="name" {...chartProps.axis} />
+                        <YAxis {...chartProps.axis} tickFormatter={(val) => `R$${val}`} width={60} />
+                        <Tooltip {...chartProps.tooltip} formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Valor Pago/Prog.']} />
                         <Bar dataKey="Valor" fill={COLOR_EXPENSE_PENDING} barSize={30} radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
