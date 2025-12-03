@@ -5,6 +5,7 @@ import TransactionList from './components/TransactionList';
 import DebtList from './components/DebtList';
 import AiPlanner from './components/AiPlanner';
 import Fluxo from './components/Fluxo';
+import MarketWidgets from './components/MarketWidgets'; // IMPORT
 import { Auth } from './components/Auth';
 import { LayoutDashboard, Wallet, Receipt, BrainCircuit, Loader2, LogOut, Activity } from 'lucide-react';
 import { dataService } from './services/dataService';
@@ -299,6 +300,9 @@ const App: React.FC = () => {
             </button>
           </div>
         </nav>
+
+        {/* MARKET WIDGETS SECTION */}
+        <MarketWidgets />
 
         <div className="p-4 border-t border-slate-800">
            <button 
