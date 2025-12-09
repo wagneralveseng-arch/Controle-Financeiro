@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Debt } from '../types';
 import { PlusCircle, Trash2, Edit2, Save, Repeat, CheckCircle2, Circle, ShieldCheck, PieChart as PieIcon, ArrowDownCircle, ArrowUpCircle, PiggyBank, Link as LinkIcon, Loader2 } from 'lucide-react';
@@ -260,15 +261,22 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, debts, 
              {items.map(t => (
                  <div key={t.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 group">
                     <div className="flex items-center gap-4">
-                        <button 
-                           onClick={() => onToggleStatus(t.id)} 
-                           className="text-slate-400 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
-                           title={t.status === 'PAID' ? 'Marcar como Pendente' : 'Marcar como Pago'}
-                        >
-                            {t.status === 'PAID' ? <CheckCircle2 className="w-6 h-6 text-green-500" /> : <Circle className="w-6 h-6" />}
-                        </button>
+                        {t.type === 'INCOME' ? (
+                            <div className="text-emerald-500 dark:text-emerald-400" title="Receita Confirmada">
+                                <ArrowUpCircle className="w-6 h-6" />
+                            </div>
+                        ) : (
+                            <button 
+                               onClick={() => onToggleStatus(t.id)} 
+                               className="text-slate-400 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
+                               title={t.status === 'PAID' ? 'Marcar como Pendente' : 'Marcar como Pago'}
+                            >
+                                {t.status === 'PAID' ? <CheckCircle2 className="w-6 h-6 text-green-500" /> : <Circle className="w-6 h-6" />}
+                            </button>
+                        )}
+
                         <div>
-                            <p className={`font-bold text-sm ${t.status === 'PAID' ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>{t.description}</p>
+                            <p className={`font-bold text-sm ${t.status === 'PAID' && t.type !== 'INCOME' ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-white'}`}>{t.description}</p>
                             <div className="flex items-center gap-2 text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1">
                                 <span className="text-slate-500 dark:text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
                                 <span>•</span>
