@@ -1,3 +1,4 @@
+
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'SAVING';
 
 export interface Transaction {
@@ -24,14 +25,33 @@ export interface Debt {
 }
 
 export interface MonthlyProjection {
-  monthIndex: number; // 0 for current, 1 for next month...
   monthLabel: string;
   openingBalance: number;
   totalIncome: number;
-  fixedExpenses: number;
-  debtPayments: { debtId: string; amount: number; creditor: string }[];
+  totalExpenses: number;
+  totalSavings: number;
   closingBalance: number;
   notes: string;
+}
+
+export interface EconomicProfile {
+  category: string;
+  description: string;
+  score: number; // 0-100
+  keyAdvice: string;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface AnnualReportResponse {
+  economicProfile: EconomicProfile;
+  annualSummary: {
+    totalProjectedIncome: number;
+    totalProjectedExpenses: number;
+    totalProjectedSavings: number;
+    averageMonthlyBalance: number;
+  };
+  projections: MonthlyProjection[];
 }
 
 export interface FinancialState {
@@ -40,8 +60,20 @@ export interface FinancialState {
   debts: Debt[];
 }
 
+// Fixed missing AIPlanResponse export for AI strategy features
 export interface AIPlanResponse {
-  strategySummary: string;
-  projections: MonthlyProjection[];
   estimatedDebtFreeDate: string;
+  strategySummary: string;
+  projections: {
+    monthLabel: string;
+    openingBalance: number;
+    totalIncome: number;
+    fixedExpenses: number;
+    debtPayments: {
+      creditor: string;
+      amount: number;
+    }[];
+    closingBalance: number;
+    notes: string;
+  }[];
 }
