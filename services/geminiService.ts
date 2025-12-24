@@ -2,9 +2,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FinancialState, AnnualReportResponse, AIPlanResponse } from "../types";
 
-const MODEL_NAME = "gemini-3-pro-preview";
+const MODEL_REPORT = "gemini-3-flash-preview";
+const MODEL_PLAN = "gemini-3-pro-preview";
 
-// Using object literals for schemas to follow best practices as per guidelines
+// Schema para o Relatório Anual
 const reportSchema = {
   type: Type.OBJECT,
   properties: {
@@ -51,7 +52,7 @@ const reportSchema = {
   required: ["economicProfile", "annualSummary", "projections"],
 };
 
-// Schema for the zero debt strategy plan
+// Schema para o plano de quitação de dívidas
 const planSchema = {
   type: Type.OBJECT,
   properties: {
@@ -108,45 +109,40 @@ export const generateAnnualReport = async (state: FinancialState): Promise<Annua
 
   const prompt = `
     ATUE COMO: "Diretor Financeiro (CFO) e Especialista em Behavioral Finance".
-    MISSÃO: Analisar o histórico transacional e a carteira de dívidas do cliente para:
-    1. Identificar o PERFIL ECONÔMICO (Psicologia Financeira).
-    2. Gerar uma PROJEÇÃO ANUAL (12 meses) de fluxo de caixa.
+    MISSÃO: Analisar o histórico transacional e a carteira de dívidas do cliente para identificar o PERFIL ECONÔMICO e gerar uma PROJEÇÃO ANUAL de 12 meses.
 
-    DADOS DO CLIENTE (JSON):
+    DADOS DO CLIENTE:
     - Saldo em Caixa Atual: R$ ${currentBalance.toFixed(2)}
-    - Transações (Passado e Agendadas): ${JSON.stringify(simplifiedTransactions)}
+    - Transações: ${JSON.stringify(simplifiedTransactions)}
     - Dívidas Ativas: ${JSON.stringify(simplifiedDebts)}
 
-    DIRETRIZES DE ANÁLISE:
-    - Analise a recorrência de receitas para projetar os próximos 12 meses.
-    - Avalie se as despesas são essenciais ou supérfluas baseando-se nas categorias.
-    - Perfil Econômico: Classifique se o usuário é "Sobrevivente", "Poupador", "Investidor", "Endividado" ou "Arrojado".
-    - Projeção: O saldo inicial do Mês 1 é o saldo atual. O fechamento de um mês é a abertura do outro.
-
-    Gere um JSON estrito seguindo o schema. Fale em Português do Brasil.
+    DIRETRIZES:
+    - Seja realista. Se o saldo for negativo, sugira cortes.
+    - O Perfil Econômico deve refletir o equilíbrio entre entradas e saídas.
+    - Projeção: Mês 1 começa com o Saldo Atual.
+    - Gere JSON estrito conforme o schema.
   `;
 
   try {
-    // Initializing SDK inside the function to ensure the latest configuration as per requirements
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: MODEL_REPORT,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: reportSchema,
-        thinkingConfig: { thinkingBudget: 2048 },
+        // Removido thinkingBudget para maior velocidade e compatibilidade imediata
       },
     });
 
+    if (!response.text) throw new Error("Modelo não retornou texto.");
     return JSON.parse(response.text) as AnnualReportResponse;
   } catch (error) {
-    console.error("Annual Report Error:", error);
+    console.error("Gemini Annual Report Error:", error);
     throw error;
   }
 };
 
-// Fixed missing generateZeroDebtPlan export to handle debt quittance strategy
 export const generateZeroDebtPlan = async (state: FinancialState): Promise<AIPlanResponse> => {
   const { transactions, debts, currentBalance } = state;
 
@@ -166,35 +162,28 @@ export const generateZeroDebtPlan = async (state: FinancialState): Promise<AIPla
   }));
 
   const prompt = `
-    ATUE COMO: "Especialista em Recuperação de Crédito e Planejamento Financeiro".
-    DADOS:
-    - Saldo Atual: R$ ${currentBalance.toFixed(2)}
-    - Dívidas Ativas: ${JSON.stringify(simplifiedDebts)}
-    - Histórico Recente: ${JSON.stringify(simplifiedTransactions)}
-
-    MISSÃO: Gerar um plano tático de 12 meses focado em QUITAR TODAS AS DÍVIDAS o mais rápido possível.
-    Use o "Método Avalanche" (maiores juros primeiro) ou "Bola de Neve" conforme sua análise técnica.
-    O saldo inicial do Mês 1 é o saldo atual.
-    
-    Gere um JSON estrito seguindo o schema. Fale em Português do Brasil.
+    ATUE COMO: "Especialista em Recuperação de Crédito".
+    MISSÃO: Gerar um plano de 12 meses focado em QUITAR DÍVIDAS.
+    DADOS: Saldo R$ ${currentBalance.toFixed(2)}, Dívidas: ${JSON.stringify(simplifiedDebts)}, Transações: ${JSON.stringify(simplifiedTransactions)}.
+    Gere JSON estrito conforme o schema.
   `;
 
   try {
-    // Initializing SDK inside the function for fresh state
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: MODEL_PLAN,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: planSchema,
-        thinkingConfig: { thinkingBudget: 4096 },
+        thinkingConfig: { thinkingBudget: 2048 },
       },
     });
 
+    if (!response.text) throw new Error("Modelo não retornou texto.");
     return JSON.parse(response.text) as AIPlanResponse;
   } catch (error) {
-    console.error("Zero Debt Plan Error:", error);
+    console.error("Gemini Zero Debt Plan Error:", error);
     throw error;
   }
 };

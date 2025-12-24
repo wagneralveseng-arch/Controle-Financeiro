@@ -94,8 +94,9 @@ const App: React.FC = () => {
       const report = await generateAnnualReport(financialState);
       setAnnualReport(report);
       setShowReportModal(true);
-    } catch (error) {
-      alert("Erro ao gerar o relatório anual com IA. Tente novamente em instantes.");
+    } catch (error: any) {
+      console.error("UI Error Generating Report:", error);
+      alert(`Erro ao gerar o relatório anual com IA. Motivo: ${error.message || 'Erro desconhecido'}. Tente novamente em instantes.`);
     } finally {
       setIsGeneratingReport(false);
     }
